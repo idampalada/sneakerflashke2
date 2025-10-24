@@ -331,8 +331,9 @@ private function handleOrderUpdate(array $data): \Illuminate\Http\JsonResponse
     Log::info('📋 Processing order update webhook', ['data' => $data]);
 
     try {
-        $orderData = $data['order'] ?? $data['data'] ?? $data;
-        $gineeOrderId = $orderData['orderId'] ?? $orderData['id'] ?? null;
+        // Ambil data order dari struktur webhook Ginee
+        $orderData = $data['payload'] ?? $data['order'] ?? $data['data'] ?? $data;
+        $gineeOrderId = $orderData['orderId'] ?? $orderData['id'] ?? $data['id'] ?? null;
         $orderStatus = $orderData['orderStatus'] ?? $orderData['externalOrderStatus'] ?? null;
         $action = $data['action'] ?? '';
 
@@ -347,18 +348,65 @@ private function handleOrderUpdate(array $data): \Illuminate\Http\JsonResponse
             'action' => $action
         ]);
 
-        // Proses item dalam order jika ada
-        if (isset($orderData['items']) && is_array($orderData['items'])) {
-            $this->processOrderItems($orderData['items'], $orderStatus, $action);
+        // Proses item pesanan jika ada
+        $items = $orderData['items'] ?? [];
+        
+        // Jika tidak ada item di webhook, coba ambil dari API Ginee
+        // Cek berbagai status yang memerlukan pemrosesan item
+        $requiresItems = in_array($orderStatus, ['PAID', 'READY_TO_SHIP', 'CANCELLED']);
+        
+        if (empty($items) && $requiresItems) {
+            try {
+                // Pastikan GineeClient telah terinject atau di-resolve dari container
+                $gineeClient = app(\App\Services\GineeClient::class);
+                Log::info("🔍 Mengambil detail pesanan dari Ginee API", ['order_id' => $gineeOrderId]);
+                
+                $orderDetails = $gineeClient->getOrderById($gineeOrderId);
+                
+                // Pastikan response valid dan memiliki data item
+                if (isset($orderDetails['data'][0]['items']) && is_array($orderDetails['data'][0]['items'])) {
+                    $items = $orderDetails['data'][0]['items'];
+                    Log::info("✅ Berhasil mendapatkan detail pesanan", ['items_count' => count($items)]);
+                } else {
+                    Log::warning("⚠️ Tidak dapat menemukan item dalam response API", [
+                        'order_id' => $gineeOrderId,
+                        'response' => $orderDetails
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::error("❌ Error saat mengambil detail pesanan", [
+                    'order_id' => $gineeOrderId,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+
+        // Proses item berdasarkan status
+        if (!empty($items)) {
+            if ($requiresItems) {
+                $this->processOrderItems($items, $orderStatus, $action, $gineeOrderId);
+            } else {
+                Log::info("ℹ️ Status {$orderStatus} tidak memerlukan pemrosesan stok", ['order_id' => $gineeOrderId]);
+            }
+        } else {
+            if ($requiresItems) {
+                Log::warning("⚠️ Tidak ada item yang diproses untuk pesanan yang memerlukan pemrosesan", [
+                    'order_id' => $gineeOrderId,
+                    'status' => $orderStatus
+                ]);
+            } else {
+                Log::info("ℹ️ Tidak ada item dan tidak memerlukan pemrosesan untuk status {$orderStatus}", ['order_id' => $gineeOrderId]);
+            }
         }
 
         return $this->successResponse('Order event processed', [
             'ginee_order_id' => $gineeOrderId,
-            'status' => $orderStatus
+            'status' => $orderStatus,
+            'items_processed' => count($items)
         ]);
 
     } catch (\Exception $e) {
-        Log::error('❌ Order update failed', ['error' => $e->getMessage()]);
+        Log::error('❌ Order update failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
         return $this->errorResponse('Order update failed: ' . $e->getMessage());
     }
 }
@@ -366,25 +414,165 @@ private function handleOrderUpdate(array $data): \Illuminate\Http\JsonResponse
 /**
  * Process order items and update stock
  */
-private function processOrderItems(array $items, string $orderStatus, string $action): void
+/**
+ * Proses item-item dalam pesanan dan perbarui stok
+ */
+private function processOrderItems(array $items, string $orderStatus, string $action, ?string $gineeOrderId = null): void
 {
-    Log::info("🛒 Processing order items", [
-        'count' => count($items),
+    // Log informasi awal
+    Log::info("🛒 Memproses item pesanan", [
+        'order_id' => $gineeOrderId ?? 'unknown',
         'status' => $orderStatus,
-        'action' => $action
+        'action' => $action,
+        'items_count' => count($items)
     ]);
 
-    foreach ($items as $item) {
-        $sku = $item['masterSku'] ?? $item['sku'] ?? null;
-        $quantity = $item['quantity'] ?? 0;
+    // Periksa jika order sudah diproses sebelumnya dengan memeriksa juga status
+    if ($gineeOrderId) {
+        $processKey = "ginee_order_{$gineeOrderId}_processed";
+        $cachedProcess = cache()->get($processKey);
+        
+        // Jika sudah diproses sebelumnya, tapi status berbeda, dan status baru adalah CANCELLED,
+        // tetap proses untuk mengembalikan stok
+        if ($cachedProcess && isset($cachedProcess['status']) && 
+            $cachedProcess['status'] !== $orderStatus && 
+            $orderStatus === 'CANCELLED') {
+            
+            Log::info("🔄 Status order berubah ke CANCELLED, memproses pengembalian stok", [
+                'order_id' => $gineeOrderId,
+                'previous_status' => $cachedProcess['status'],
+                'new_status' => $orderStatus
+            ]);
+            // Lanjutkan pemrosesan untuk mengembalikan stok
+        } 
+        elseif ($cachedProcess) {
+            Log::info("⏭️ Pesanan sudah diproses sebelumnya, melewati: {$gineeOrderId}");
+            return;
+        }
+    }
 
-        if (!$sku || $quantity <= 0) {
-            Log::warning("⚠️ Invalid item data", ['item' => $item]);
+    // Jika tidak ada item, log dan return
+    if (empty($items)) {
+        Log::warning("⚠️ Tidak ada item untuk diproses", ['order_id' => $gineeOrderId ?? 'unknown']);
+        return;
+    }
+
+    $updatedProducts = [];
+    $failedUpdates = [];
+
+    // Proses setiap item pesanan
+    foreach ($items as $item) {
+        // Ekstrak informasi penting dari item
+        $sku = $item['masterSku'] ?? $item['sku'] ?? null;
+        $quantity = intval($item['quantity'] ?? 1);
+        $productName = $item['productName'] ?? 'Unknown Product';
+        
+        if (!$sku) {
+            Log::warning("⚠️ Item pesanan tidak memiliki SKU", ['item' => $item]);
             continue;
         }
 
-        $this->updateStockForOrderItem($sku, $quantity, $orderStatus, $action);
+        // Cari produk berdasarkan SKU
+        $product = Product::where('sku', $sku)->first();
+        if (!$product) {
+            Log::warning("📦 Produk tidak ditemukan untuk SKU: {$sku}");
+            $failedUpdates[] = [
+                'sku' => $sku,
+                'quantity' => $quantity,
+                'reason' => 'Product not found'
+            ];
+            continue;
+        }
+
+        try {
+            DB::beginTransaction();
+            
+            $oldStock = $product->stock_quantity;
+            
+            // Logika berbeda berdasarkan status order
+            if ($orderStatus === 'PAID' || $orderStatus === 'READY_TO_SHIP') {
+                // Kurangi stok untuk pesanan baru
+                $newStock = max(0, $oldStock - $quantity);
+                
+                if ($oldStock != $newStock) {
+                    $product->stock_quantity = $newStock;
+                    $product->ginee_last_sync = now();
+                    $product->save();
+                    
+                    Log::info("📉 Stok dikurangi: {$sku} ({$oldStock} → {$newStock})", [
+                        'product_id' => $product->id, 
+                        'product_name' => $product->name,
+                        'order_id' => $gineeOrderId ?? 'unknown'
+                    ]);
+                    
+                    $updatedProducts[] = [
+                        'sku' => $sku,
+                        'product_id' => $product->id,
+                        'old_stock' => $oldStock,
+                        'new_stock' => $newStock,
+                        'quantity_ordered' => $quantity,
+                        'action' => 'decrease'
+                    ];
+                }
+            } 
+            elseif ($orderStatus === 'CANCELLED') {
+                // Kembalikan stok untuk pesanan yang dibatalkan
+                $newStock = $oldStock + $quantity;
+                
+                $product->stock_quantity = $newStock;
+                $product->ginee_last_sync = now();
+                $product->save();
+                
+                Log::info("📈 Stok dikembalikan: {$sku} ({$oldStock} → {$newStock})", [
+                    'product_id' => $product->id, 
+                    'product_name' => $product->name,
+                    'order_id' => $gineeOrderId ?? 'unknown'
+                ]);
+                
+                $updatedProducts[] = [
+                    'sku' => $sku,
+                    'product_id' => $product->id,
+                    'old_stock' => $oldStock,
+                    'new_stock' => $newStock,
+                    'quantity_returned' => $quantity,
+                    'action' => 'increase'
+                ];
+            }
+            
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("❌ Gagal memperbarui stok untuk SKU: {$sku}", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            $failedUpdates[] = [
+                'sku' => $sku,
+                'quantity' => $quantity,
+                'reason' => $e->getMessage()
+            ];
+        }
     }
+
+    // Simpan record tentang pemrosesan order ini
+    if ($gineeOrderId) {
+        $processKey = "ginee_order_{$gineeOrderId}_processed";
+        cache()->put($processKey, [
+            'processed_at' => now()->toDateTimeString(),
+            'status' => $orderStatus,
+            'updated_products' => $updatedProducts,
+            'failed_updates' => $failedUpdates
+        ], now()->addHours(24));
+    }
+
+    // Log ringkasan hasil pemrosesan
+    Log::info("✅ Pemrosesan item pesanan selesai", [
+        'order_id' => $gineeOrderId ?? 'unknown',
+        'status' => $orderStatus,
+        'updated_products_count' => count($updatedProducts),
+        'failed_updates_count' => count($failedUpdates)
+    ]);
 }
 
 /**

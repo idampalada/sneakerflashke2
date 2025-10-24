@@ -1328,5 +1328,16 @@ private function convertInventoryItemToStockData(array $item, string $source): a
         'api_source' => $source
     ];
 }
+public function getOrderById(string $orderId): array
+{
+    Log::info("🔍 [Ginee] Mengambil detail pesanan: {$orderId}");
+    
+    $body = [
+        'orderIds' => [$orderId]
+    ];
+    
+    // Perbaikan endpoint yang tadinya salah
+    return $this->request('POST', '/openapi/order/v1/batch-get', $body);
+}
 
 }
