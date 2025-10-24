@@ -450,20 +450,7 @@ class GineeClient
             'data' => $results
         ];
     }
-    public function updateAvailableStock(array $stockUpdates): array
-{
-    $body = [
-        'stockList' => $stockUpdates
-    ];
     
-    Log::info('📈 [Ginee] Updating available stock with actions', [
-        'updates_count' => count($stockUpdates),
-        'sample_sku' => $stockUpdates[0]['masterSku'] ?? 'none',
-        'sample_action' => $stockUpdates[0]['action'] ?? 'none'
-    ]);
-    
-    return $this->request('POST', '/openapi/v1/oms/stock/available-stock/update', $body);
-}
 public function createAvailableStockUpdate(
     string $masterSku, 
     string $action, 
@@ -1339,5 +1326,20 @@ public function getOrderById(string $orderId): array
     // Perbaikan endpoint yang tadinya salah
     return $this->request('POST', '/openapi/order/v1/batch-get', $body);
 }
+public function updateAvailableStock(array $stockUpdates): array
+{
+    $body = [
+        'stockList' => $stockUpdates
+    ];
+    
+    Log::info('📈 [Ginee] Updating available stock with actions', [
+        'updates_count' => count($stockUpdates),
+        'sample_sku' => $stockUpdates[0]['masterSku'] ?? 'none',
+        'sample_action' => $stockUpdates[0]['action'] ?? 'none'
+    ]);
+    
+    return $this->request('POST', '/openapi/v1/oms/stock/available-stock/update', $body);
+}
+
 
 }

@@ -1442,8 +1442,9 @@ public function store(Request $request)
                 'quantity' => (int) $item['quantity'],
                 'total_price' => (float) $item['subtotal']
             ]);
-
-            $product->decrement('stock_quantity', $item['quantity']);
+            
+            // PENTING: Komentar baris berikut untuk tidak mengurangi stok saat checkout awal
+            // $product->decrement('stock_quantity', $item['quantity']);
         }
 
         // DEDUCT POINTS FROM USER
@@ -1478,108 +1479,108 @@ public function store(Request $request)
         ]);
 
         // Create Midtrans payment
-$midtrans = $this->createMidtransPayment($order, $cartItems, $request);
+        $midtrans = $this->createMidtransPayment($order, $cartItems, $request);
 
-if ($midtrans && (isset($midtrans['token']) || isset($midtrans['force_hosted']))) {
-    
-    // Handle successful token creation
-    if (isset($midtrans['token'])) {
-        $snapToken = $midtrans['token'];
-        $redirectUrl = $midtrans['redirect_url'] ?? null;
-        $preferHosted = $midtrans['prefer_hosted'] ?? false;
-        $forceHosted = $midtrans['force_hosted'] ?? false;
-        $networkInfo = $midtrans['network_info'] ?? null;
-
-        $order->update([
-            'snap_token' => $snapToken,
-            'payment_url' => $redirectUrl,
-        ]);
-
-        Log::info('Midtrans token created successfully with enhanced handling', [
-            'order_number' => $order->order_number,
-            'snap_token_length' => strlen($snapToken),
-            'final_amount' => $totalAmount,
-            'points_discount_applied' => $pointsDiscount,
-            'prefer_hosted' => $preferHosted,
-            'force_hosted' => $forceHosted,
-            'has_redirect_url' => !empty($redirectUrl),
-            'network_can_load_popup' => $networkInfo['can_load_popup'] ?? 'unknown'
-        ]);
-
-        if ($request->ajax() || $request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Order created successfully. Opening payment gateway...',
-                'order_number' => $order->order_number,
-                'customer_name' => $order->customer_name,
-                'snap_token' => $snapToken,
-                'redirect_url' => $redirectUrl ?: route('checkout.payment', ['orderNumber' => $order->order_number]),
-                'prefer_hosted' => $preferHosted,     // 🆕 Network detection signal
-                'force_hosted' => $forceHosted,       // 🆕 Force hosted flag
-                'network_info' => $networkInfo,       // 🆕 Network information
-                'fallback_strategy' => $preferHosted ? 'hosted_payment' : 'popup_with_fallback'
-            ]);
-        }
-
-        return redirect()
-            ->route('checkout.payment', ['orderNumber' => $order->order_number])
-            ->with('snap_token', $snapToken)
-            ->with('prefer_hosted', $preferHosted)
-            ->with('force_hosted', $forceHosted);
+        if ($midtrans && (isset($midtrans['token']) || isset($midtrans['force_hosted']))) {
             
-    } 
-    // Handle fallback scenarios (no token but has fallback info)
-    elseif (isset($midtrans['force_hosted']) && $midtrans['force_hosted']) {
-        $errorMessage = $midtrans['error'] ?? 'Payment gateway temporarily unavailable';
-        $fallbackUrl = $midtrans['fallback_url'] ?? route('checkout.payment', ['orderNumber' => $order->order_number]);
-        
-        Log::warning('Midtrans token creation failed, using fallback strategy', [
-            'order_number' => $order->order_number,
-            'error' => $errorMessage,
-            'fallback_url' => $fallbackUrl,
-            'prefer_hosted' => $midtrans['prefer_hosted'] ?? true
-        ]);
+            // Handle successful token creation
+            if (isset($midtrans['token'])) {
+                $snapToken = $midtrans['token'];
+                $redirectUrl = $midtrans['redirect_url'] ?? null;
+                $preferHosted = $midtrans['prefer_hosted'] ?? false;
+                $forceHosted = $midtrans['force_hosted'] ?? false;
+                $networkInfo = $midtrans['network_info'] ?? null;
 
-        if ($request->ajax() || $request->expectsJson()) {
-            return response()->json([
-                'success' => true, // Still success because order was created
-                'message' => 'Order created successfully. Redirecting to secure payment page...',
+                $order->update([
+                    'snap_token' => $snapToken,
+                    'payment_url' => $redirectUrl,
+                ]);
+
+                Log::info('Midtrans token created successfully with enhanced handling', [
+                    'order_number' => $order->order_number,
+                    'snap_token_length' => strlen($snapToken),
+                    'final_amount' => $totalAmount,
+                    'points_discount_applied' => $pointsDiscount,
+                    'prefer_hosted' => $preferHosted,
+                    'force_hosted' => $forceHosted,
+                    'has_redirect_url' => !empty($redirectUrl),
+                    'network_can_load_popup' => $networkInfo['can_load_popup'] ?? 'unknown'
+                ]);
+
+                if ($request->ajax() || $request->expectsJson()) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Order created successfully. Opening payment gateway...',
+                        'order_number' => $order->order_number,
+                        'customer_name' => $order->customer_name,
+                        'snap_token' => $snapToken,
+                        'redirect_url' => $redirectUrl ?: route('checkout.payment', ['orderNumber' => $order->order_number]),
+                        'prefer_hosted' => $preferHosted,     // 🆕 Network detection signal
+                        'force_hosted' => $forceHosted,       // 🆕 Force hosted flag
+                        'network_info' => $networkInfo,       // 🆕 Network information
+                        'fallback_strategy' => $preferHosted ? 'hosted_payment' : 'popup_with_fallback'
+                    ]);
+                }
+
+                return redirect()
+                    ->route('checkout.payment', ['orderNumber' => $order->order_number])
+                    ->with('snap_token', $snapToken)
+                    ->with('prefer_hosted', $preferHosted)
+                    ->with('force_hosted', $forceHosted);
+                    
+            } 
+            // Handle fallback scenarios (no token but has fallback info)
+            elseif (isset($midtrans['force_hosted']) && $midtrans['force_hosted']) {
+                $errorMessage = $midtrans['error'] ?? 'Payment gateway temporarily unavailable';
+                $fallbackUrl = $midtrans['fallback_url'] ?? route('checkout.payment', ['orderNumber' => $order->order_number]);
+                
+                Log::warning('Midtrans token creation failed, using fallback strategy', [
+                    'order_number' => $order->order_number,
+                    'error' => $errorMessage,
+                    'fallback_url' => $fallbackUrl,
+                    'prefer_hosted' => $midtrans['prefer_hosted'] ?? true
+                ]);
+
+                if ($request->ajax() || $request->expectsJson()) {
+                    return response()->json([
+                        'success' => true, // Still success because order was created
+                        'message' => 'Order created successfully. Redirecting to secure payment page...',
+                        'order_number' => $order->order_number,
+                        'customer_name' => $order->customer_name,
+                        'snap_token' => null,
+                        'redirect_url' => $fallbackUrl,
+                        'prefer_hosted' => true,
+                        'force_hosted' => true,
+                        'fallback_strategy' => 'hosted_payment_only',
+                        'warning' => 'Using secure payment page due to connectivity'
+                    ]);
+                }
+
+                return redirect($fallbackUrl)
+                      ->with('warning', 'Payment gateway opened in secure mode. Your order has been created successfully.');
+            }
+            
+        } else {
+            // Complete failure - no token and no fallback
+            Log::error('Complete Midtrans payment creation failure', [
                 'order_number' => $order->order_number,
-                'customer_name' => $order->customer_name,
-                'snap_token' => null,
-                'redirect_url' => $fallbackUrl,
-                'prefer_hosted' => true,
-                'force_hosted' => true,
-                'fallback_strategy' => 'hosted_payment_only',
-                'warning' => 'Using secure payment page due to connectivity'
+                'payment_method' => $request->payment_method,
+                'total_amount' => $totalAmount,
+                'midtrans_response' => $midtrans
             ]);
+
+            if ($request->ajax() || $request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Failed to create payment session. Please try again or contact support.',
+                    'order_number' => $order->order_number,
+                    'fallback_url' => route('checkout.payment', ['orderNumber' => $order->order_number])
+                ], 500);
+            }
+
+            return redirect()->route('checkout.success', ['orderNumber' => $order->order_number])
+                          ->with('error', 'Order created but payment session failed. Please contact support to complete payment.');
         }
-
-        return redirect($fallbackUrl)
-               ->with('warning', 'Payment gateway opened in secure mode. Your order has been created successfully.');
-    }
-    
-} else {
-    // Complete failure - no token and no fallback
-    Log::error('Complete Midtrans payment creation failure', [
-        'order_number' => $order->order_number,
-        'payment_method' => $request->payment_method,
-        'total_amount' => $totalAmount,
-        'midtrans_response' => $midtrans
-    ]);
-
-    if ($request->ajax() || $request->expectsJson()) {
-        return response()->json([
-            'success' => false,
-            'error' => 'Failed to create payment session. Please try again or contact support.',
-            'order_number' => $order->order_number,
-            'fallback_url' => route('checkout.payment', ['orderNumber' => $order->order_number])
-        ], 500);
-    }
-
-    return redirect()->route('checkout.success', ['orderNumber' => $order->order_number])
-                   ->with('error', 'Order created but payment session failed. Please contact support to complete payment.');
-}
 
     } catch (\Exception $e) {
         DB::rollback();
@@ -1612,6 +1613,143 @@ if ($midtrans && (isset($midtrans['token']) || isset($midtrans['force_hosted']))
         }
         
         return back()->withInput()->with('error', $errorMessage);
+    }
+}
+
+/**
+ * Process stock reduction for paid orders and send to Ginee
+ */
+/**
+ * Process stock reduction for paid orders and send to Ginee
+ */
+private function processStockReductionForPaidOrder(Order $order)
+{
+    try {
+        $orderItems = $order->orderItems()->with('product')->get();
+        $stockUpdates = [];
+        
+        foreach ($orderItems as $item) {
+            if (!$item->product) {
+                continue;
+            }
+            
+            // Kurangi stok di database lokal
+            $oldStock = $item->product->stock_quantity;
+            $newStock = max(0, $oldStock - $item->quantity);
+            
+            $item->product->update([
+                'stock_quantity' => $newStock
+            ]);
+            
+            Log::info("📉 Stock reduced for product", [
+                'product_id' => $item->product_id,
+                'sku' => $item->product->sku,
+                'old_stock' => $oldStock,
+                'new_stock' => $newStock,
+                'quantity' => $item->quantity,
+                'order_id' => $order->order_number
+            ]);
+            
+            // Siapkan data untuk Ginee API - GUNAKAN FORMAT STOCK UPDATE BIASA
+            if ($item->product->sku) {
+                $stockUpdates[] = [
+                    'masterSku' => $item->product->sku,
+                    'quantity' => $newStock // Set langsung ke nilai absolut
+                ];
+            }
+        }
+        
+        // Kirim perubahan stok ke Ginee menggunakan updateStock()
+        if (!empty($stockUpdates)) {
+            $gineeClient = app(\App\Services\GineeClient::class);
+            
+            // Gunakan updateStock API sebagai alternatif
+            $result = $gineeClient->updateStock($stockUpdates);
+            
+            Log::info("🔄 Absolute stock update sent to Ginee", [
+                'order_id' => $order->order_number,
+                'updates' => count($stockUpdates),
+                'result' => $result
+            ]);
+        }
+    } catch (\Exception $e) {
+        Log::error("❌ Error processing stock reduction", [
+            'order_id' => $order->order_number,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+    }
+}
+
+/**
+ * Helper function to get enabled warehouse ID
+ */
+private function getEnabledWarehouseId()
+{
+    return config('services.ginee.warehouse_id');
+}
+
+/**
+ * Process stock restoration for cancelled orders
+ */
+private function processStockRestoreForCancelledOrder(Order $order)
+{
+    try {
+        $orderItems = $order->orderItems()->with('product')->get();
+        $stockUpdates = [];
+        
+        foreach ($orderItems as $item) {
+            if (!$item->product) {
+                continue;
+            }
+            
+            // Kembalikan stok di database lokal
+            $oldStock = $item->product->stock_quantity;
+            $newStock = $oldStock + $item->quantity;
+            
+            $item->product->update([
+                'stock_quantity' => $newStock
+            ]);
+            
+            Log::info("📈 Stock restored for product", [
+                'product_id' => $item->product_id,
+                'sku' => $item->product->sku,
+                'old_stock' => $oldStock,
+                'new_stock' => $newStock,
+                'quantity' => $item->quantity,
+                'order_id' => $order->order_number
+            ]);
+            
+            // Siapkan data untuk Ginee API
+            if ($item->product->sku) {
+                $stockUpdates[] = [
+                    'masterSku' => $item->product->sku,
+                    'action' => 'INCREASE',
+                    'quantity' => $item->quantity,
+                    'remark' => "Order {$order->order_number} cancelled"
+                ];
+            }
+        }
+        
+        // Kirim perubahan stok ke Ginee jika ada
+        if (!empty($stockUpdates)) {
+            $gineeClient = app(\App\Services\GineeClient::class);
+            
+            // Gunakan available-stock API untuk mengembalikan stok
+            $result = $gineeClient->updateAvailableStock($stockUpdates);
+            
+            Log::info("🔄 Stock restoration sent to Ginee", [
+                'order_id' => $order->order_number,
+                'updates' => count($stockUpdates),
+                'result' => $result
+            ]);
+        }
+    } catch (\Exception $e) {
+        Log::error("❌ Error processing stock restoration", [
+            'order_id' => $order->order_number,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
     }
 }
 
@@ -2399,65 +2537,118 @@ public function paymentUnfinish(Request $request)
     }
 
     public function paymentNotification(Request $request)
-    {
-        try {
-            Log::info('=== MIDTRANS WEBHOOK RECEIVED ===', [
-                'timestamp' => now()->toISOString(),
-                'payload' => $request->all(),
-                'order_id' => $request->get('order_id'),
-                'transaction_status' => $request->get('transaction_status')
-            ]);
-            
-            $notification = $this->midtransService->handleNotification($request->all());
-            
-            if (!$notification) {
-                return response()->json([
-                    'status' => 'failed', 
-                    'message' => 'Invalid notification'
-                ], 400);
-            }
+{
+    try {
+        Log::info('=== MIDTRANS WEBHOOK RECEIVED ===', [
+            'timestamp' => now()->toISOString(),
+            'payload' => $request->all(),
+            'order_id' => $request->get('order_id'),
+            'transaction_status' => $request->get('transaction_status')
+        ]);
+        
+        $notification = $this->midtransService->handleNotification($request->all());
+        
+        if (!$notification) {
+            return response()->json([
+                'status' => 'failed', 
+                'message' => 'Invalid notification'
+            ], 400);
+        }
 
-            $order = Order::where('order_number', $notification['order_id'])->first();
-            
-            if (!$order) {
-                return response()->json([
-                    'status' => 'success', 
-                    'message' => 'Order not found but notification received'
+        $order = Order::where('order_number', $notification['order_id'])->first();
+        
+        if (!$order) {
+            return response()->json([
+                'status' => 'success', 
+                'message' => 'Order not found but notification received'
+            ]);
+        }
+
+        $oldStatus = $order->status;
+        $newStatus = $this->mapMidtransToOrderStatus(
+            $notification['payment_status'] ?? 'unknown',
+            $notification['transaction_status'] ?? 'unknown',
+            $notification['fraud_status'] ?? 'accept'
+        );
+        
+        Log::info('Order status mapping result', [
+            'order_id' => $notification['order_id'],
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus,
+            'payment_status' => $notification['payment_status'] ?? 'unknown',
+            'transaction_status' => $notification['transaction_status'] ?? 'unknown'
+        ]);
+        
+        // Update order status
+        $order->update([
+            'status' => $newStatus,
+            'payment_response' => json_encode($notification['raw_notification'] ?? $request->all())
+        ]);
+        
+        // JIKA STATUS BERUBAH DARI PENDING KE PAID, KURANGI STOK DAN KIRIM KE GINEE
+        if ($oldStatus !== 'paid' && $newStatus === 'paid') {
+            try {
+                Log::info('Calling processStockReductionForPaidOrder', [
+                    'order_id' => $order->order_number
+                ]);
+                
+                $this->processStockReductionForPaidOrder($order);
+                
+                Log::info('Successfully reduced stock for paid order', [
+                    'order_id' => $order->order_number
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Error in processStockReductionForPaidOrder', [
+                    'order_id' => $order->order_number,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
                 ]);
             }
-
-            $oldStatus = $order->status;
-            $newStatus = $this->mapMidtransToOrderStatus(
-                $notification['payment_status'] ?? 'unknown',
-                $notification['transaction_status'] ?? 'unknown',
-                $notification['fraud_status'] ?? 'accept'
-            );
-            
-            $order->update([
-                'status' => $newStatus,
-                'payment_response' => json_encode($notification['raw_notification'] ?? $request->all())
-            ]);
-            
-            Log::info('Order status updated', [
-                'order_number' => $notification['order_id'],
-                'old_status' => $oldStatus,
-                'new_status' => $newStatus
-            ]);
-            
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Notification processed successfully'
-            ]);
-            
-        } catch (\Exception $e) {
-            Log::error('Webhook processing error: ' . $e->getMessage());
-            
-            return response()->json([
-                'status' => 'error', 
-                'message' => 'Processing failed'
-            ], 200);
         }
+        
+        // JIKA STATUS BERUBAH KE CANCELLED, KEMBALIKAN STOK
+        if ($newStatus === 'cancelled' && $oldStatus !== 'cancelled') {
+            try {
+                Log::info('Calling processStockRestoreForCancelledOrder', [
+                    'order_id' => $order->order_number
+                ]);
+                
+                $this->processStockRestoreForCancelledOrder($order);
+                
+                Log::info('Successfully restored stock for cancelled order', [
+                    'order_id' => $order->order_number
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Error in processStockRestoreForCancelledOrder', [
+                    'order_id' => $order->order_number,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+            }
+        }
+        
+        Log::info('Order status updated', [
+            'order_number' => $notification['order_id'],
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus
+        ]);
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Notification processed successfully'
+        ]);
+        
+    } catch (\Exception $e) {
+        Log::error('Webhook processing error: ' . $e->getMessage(), [
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return response()->json([
+            'status' => 'error', 
+            'message' => 'Processing failed'
+        ], 200);
     }
+}
 
     private function mapMidtransToOrderStatus($paymentStatus, $transactionStatus, $fraudStatus = 'accept')
     {
