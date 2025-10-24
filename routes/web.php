@@ -107,13 +107,20 @@ Route::withoutMiddleware(['web'])->group(function () {
         ]);
     })->name('checkout.payment-notification.info');
 
-    // Ginee Webhooks
-    Route::prefix('api/webhooks/ginee')->group(function () {
-        Route::get('/health', fn () => response()->json(['ok'=>true,'ts'=>now()]));
-        Route::post('/orders', [GineeWebhookController::class, 'orders'])->name('webhooks.ginee.orders');
-        Route::post('/master-products', [GineeWebhookController::class, 'masterProducts'])->name('webhooks.ginee.master_products');
-        Route::match(['GET','POST'], '/global', [GineeWebhookController::class, 'global'])->name('webhooks.ginee.global');
-    });
+// Ginee Webhooks
+Route::prefix('api/webhooks/ginee')->group(function () {
+    Route::get('/health', fn () => response()->json(['ok'=>true,'ts'=>now()]));
+    Route::post('/orders', [GineeWebhookController::class, 'orders'])->name('webhooks.ginee.orders');
+    Route::post('/master-products', [GineeWebhookController::class, 'masterProducts'])->name('webhooks.ginee.master_products');
+    Route::match(['GET','POST'], '/global', [GineeWebhookController::class, 'global'])->name('webhooks.ginee.global');
+});
+
+// Subdomain webhook route - HARUS DI LUAR withoutMiddleware group
+Route::domain('webhook.meltedcloud.cloud')->group(function () {
+    Route::post('/webhook', [GineeWebhookController::class, 'global'])
+          ->name('webhook.ginee.subdomain')
+          ->withoutMiddleware(['web', 'csrf']);
+});
 });
 
 // =====================================

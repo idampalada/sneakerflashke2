@@ -16,87 +16,153 @@ class GineeWebhookController extends Controller
      * Global webhook endpoint for all Ginee events
      */
     public function global(Request $request)
-    {
-        try {
-            // Log the incoming webhook
-            Log::info('🔔 Ginee Webhook Received', [
-                'method' => $request->method(),
-                'headers' => $request->headers->all(),
-                'body' => $request->all(),
-                'raw_body' => $request->getContent(),
-                'timestamp' => now()
-            ]);
+{
+    try {
+        // DEBUG CONNECTION - Log lebih detail untuk memeriksa koneksi
+        Log::info('🔍 WEBHOOK CONNECTION TEST - DETAILED', [
+            'host' => $request->getHost(),
+            'url' => $request->fullUrl(),
+            'method' => $request->method(),
+            'headers' => $request->headers->all(),
+            'body' => $request->all(),
+            'raw_body' => $request->getContent(),
+            'server_vars' => [
+                'SERVER_NAME' => $_SERVER['SERVER_NAME'] ?? 'unknown',
+                'HTTP_HOST' => $_SERVER['HTTP_HOST'] ?? 'unknown',
+                'REMOTE_ADDR' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
+            ],
+            'timestamp' => now()->toDateTimeString()
+        ]);
 
-            // Verify webhook signature if enabled
-            if (config('services.ginee.verify_webhooks', false)) {
-                if (!$this->verifyWebhookSignature($request)) {
-                    Log::warning('❌ Invalid webhook signature');
-                    return response()->json(['error' => 'Invalid signature'], 401);
-                }
+        // Log the incoming webhook (kode asli)
+        Log::info('🔔 Ginee Webhook Received', [
+            'method' => $request->method(),
+            'headers' => $request->headers->all(),
+            'body' => $request->all(),
+            'raw_body' => $request->getContent(),
+            'timestamp' => now()
+        ]);
+
+        // Verify webhook signature if enabled
+        if (config('services.ginee.verify_webhooks', false)) {
+            if (!$this->verifyWebhookSignature($request)) {
+                Log::warning('❌ Invalid webhook signature');
+                return response()->json(['error' => 'Invalid signature'], 401);
             }
-
-            $data = $request->all();
-            $eventType = $data['event_type'] ?? $data['type'] ?? 'unknown';
-
-            // Store webhook event for debugging
-            $this->storeWebhookEvent($request, $eventType);
-
-            // Route to appropriate handler based on event type
-            switch ($eventType) {
-                case 'master_product_updated':
-                case 'product_updated':
-                    return $this->handleProductUpdate($data);
-
-                case 'stock_updated':
-                case 'inventory_updated':
-                    return $this->handleStockUpdate($data);
-
-                case 'order_created':
-                case 'order_updated':
-                    return $this->handleOrderUpdate($data);
-
-                default:
-                    Log::info("📝 Unhandled webhook event: {$eventType}", ['data' => $data]);
-                    return $this->successResponse('Event received but not processed');
-            }
-
-        } catch (\Exception $e) {
-            Log::error('❌ Webhook processing failed', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'request_data' => $request->all()
-            ]);
-
-            return response()->json([
-                'error' => 'Webhook processing failed',
-                'message' => $e->getMessage()
-            ], 500);
         }
+
+        $data = $request->all();
+        $eventType = $data['event_type'] ?? $data['type'] ?? 'unknown';
+
+        // Store webhook event for debugging
+        $this->storeWebhookEvent($request, $eventType);
+
+        // Route to appropriate handler based on event type
+        switch ($eventType) {
+            case 'master_product_updated':
+            case 'product_updated':
+                return $this->handleProductUpdate($data);
+
+            case 'stock_updated':
+            case 'inventory_updated':
+                return $this->handleStockUpdate($data);
+
+            case 'order_created':
+            case 'order_updated':
+                return $this->handleOrderUpdate($data);
+
+            default:
+                Log::info("📝 Unhandled webhook event: {$eventType}", ['data' => $data]);
+                return $this->successResponse('Event received but not processed');
+        }
+
+    } catch (\Exception $e) {
+        // Tambahkan detail lebih lengkap saat error
+        Log::error('❌ Webhook processing failed', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'request_data' => $request->all(),
+            'host' => $request->getHost(),
+            'url' => $request->fullUrl(),
+            'timestamp' => now()->toDateTimeString()
+        ]);
+
+        return response()->json([
+            'error' => 'Webhook processing failed',
+            'message' => $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Handle specific order events
      */
-    public function orders(Request $request)
-    {
-        Log::info('📋 Ginee Order Webhook', [
-            'data' => $request->all(),
-            'timestamp' => now()
-        ]);
+public function orders(Request $request)
+{
+    // Log ke file terpisah untuk memudahkan debugging
+    $logPath = storage_path('logs/ginee-webhook.log');
+    $logData = date('Y-m-d H:i:s') . ' - Webhook order received from IP: ' . $request->ip() . "\n";
+    $logData .= 'Raw data: ' . $request->getContent() . "\n\n";
+    file_put_contents($logPath, $logData, FILE_APPEND);
+    
+    // Log ke laravel.log biasa
+    Log::info('📋 GINEE ORDER WEBHOOK RECEIVED', [
+        'url' => $request->fullUrl(),
+        'method' => $request->method(),
+        'ip' => $request->ip(),
+        'host' => $request->getHost(),
+        'headers' => $request->headers->all(),
+        'data' => $request->all(),
+        'timestamp' => now()->toDateTimeString()
+    ]);
 
+    try {
+        // Store the webhook event for debugging
         try {
-            $data = $request->all();
-            return $this->handleOrderUpdate($data);
-
-        } catch (\Exception $e) {
-            Log::error('❌ Order webhook failed', [
-                'error' => $e->getMessage(),
-                'data' => $request->all()
+            DB::table('webhook_events')->insert([
+                'source' => 'ginee',
+                'entity' => 'order',
+                'action' => $request->input('action', 'unknown'),
+                'event_type' => $request->input('event_type', 'order_webhook'),
+                'payload' => $request->getContent(),
+                'headers' => json_encode($request->headers->all()),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'processed' => false,
+                'created_at' => now(),
+                'updated_at' => now()
             ]);
-
-            return response()->json(['error' => $e->getMessage()], 500);
+            
+            Log::info('✅ Webhook event stored in database');
+        } catch (\Exception $dbEx) {
+            Log::error('❌ Failed to store webhook event in database', [
+                'error' => $dbEx->getMessage()
+            ]);
+            // Continue despite DB error
         }
+
+        $data = $request->all();
+        Log::info('📦 Processing order data', ['order_id' => $data['orderId'] ?? 'unknown']);
+        
+        // Process the webhook
+        return $this->handleOrderUpdate($data);
+    } catch (\Exception $e) {
+        $errorMsg = '❌ Order webhook processing failed: ' . $e->getMessage();
+        Log::error($errorMsg, [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'data' => $request->all()
+        ]);
+        
+        // Also log to the separate log file
+        file_put_contents($logPath, date('Y-m-d H:i:s') . ' - ERROR: ' . $e->getMessage() . "\n", FILE_APPEND);
+
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Handle specific master product events
@@ -257,32 +323,124 @@ class GineeWebhookController extends Controller
     /**
      * Handle order update webhook
      */
-    private function handleOrderUpdate(array $data): \Illuminate\Http\JsonResponse
-    {
-        Log::info('📋 Processing order update webhook', ['data' => $data]);
+    /**
+ * Handle order update webhook
+ */
+private function handleOrderUpdate(array $data): \Illuminate\Http\JsonResponse
+{
+    Log::info('📋 Processing order update webhook', ['data' => $data]);
 
-        try {
-            $orderData = $data['order'] ?? $data['data'] ?? $data;
-            $gineeOrderId = $orderData['orderId'] ?? $orderData['id'] ?? null;
+    try {
+        $orderData = $data['order'] ?? $data['data'] ?? $data;
+        $gineeOrderId = $orderData['orderId'] ?? $orderData['id'] ?? null;
+        $orderStatus = $orderData['orderStatus'] ?? $orderData['externalOrderStatus'] ?? null;
+        $action = $data['action'] ?? '';
 
-            if (!$gineeOrderId) {
-                Log::warning('⚠️ Order webhook missing order ID', ['data' => $data]);
-                return $this->errorResponse('Missing order ID');
-            }
-
-            // You can implement order sync logic here if needed
-            // For now, just log the order data
-            Log::info("📋 Ginee order event: {$gineeOrderId}", ['order_data' => $orderData]);
-
-            return $this->successResponse('Order event processed', [
-                'ginee_order_id' => $gineeOrderId
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('❌ Order update failed', ['error' => $e->getMessage()]);
-            return $this->errorResponse('Order update failed: ' . $e->getMessage());
+        if (!$gineeOrderId) {
+            Log::warning('⚠️ Order webhook missing order ID', ['data' => $data]);
+            return $this->errorResponse('Missing order ID');
         }
+
+        Log::info("📋 Ginee order event received", [
+            'ginee_order_id' => $gineeOrderId,
+            'order_status' => $orderStatus,
+            'action' => $action
+        ]);
+
+        // Proses item dalam order jika ada
+        if (isset($orderData['items']) && is_array($orderData['items'])) {
+            $this->processOrderItems($orderData['items'], $orderStatus, $action);
+        }
+
+        return $this->successResponse('Order event processed', [
+            'ginee_order_id' => $gineeOrderId,
+            'status' => $orderStatus
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('❌ Order update failed', ['error' => $e->getMessage()]);
+        return $this->errorResponse('Order update failed: ' . $e->getMessage());
     }
+}
+
+/**
+ * Process order items and update stock
+ */
+private function processOrderItems(array $items, string $orderStatus, string $action): void
+{
+    Log::info("🛒 Processing order items", [
+        'count' => count($items),
+        'status' => $orderStatus,
+        'action' => $action
+    ]);
+
+    foreach ($items as $item) {
+        $sku = $item['masterSku'] ?? $item['sku'] ?? null;
+        $quantity = $item['quantity'] ?? 0;
+
+        if (!$sku || $quantity <= 0) {
+            Log::warning("⚠️ Invalid item data", ['item' => $item]);
+            continue;
+        }
+
+        $this->updateStockForOrderItem($sku, $quantity, $orderStatus, $action);
+    }
+}
+
+/**
+ * Update local stock based on order status
+ */
+private function updateStockForOrderItem(string $sku, int $quantity, string $orderStatus, string $action): bool
+{
+    try {
+        $product = Product::where('sku', $sku)->first();
+        
+        if (!$product) {
+            Log::warning("📦 Product not found for stock update: {$sku}");
+            return false;
+        }
+
+        $oldStock = $product->stock_quantity;
+        $newStock = $oldStock;
+        
+        // Handle different order statuses
+        if (in_array(strtoupper($orderStatus), ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'COMPLETED']) && 
+            strtoupper($action) === 'UPDATE') {
+            // Kurangi stok saat pesanan dibayar atau diproses
+            $newStock = $oldStock - $quantity;
+            Log::info("📊 Reducing stock due to paid order: {$sku} ({$oldStock} → {$newStock})");
+        } 
+        else if (strtoupper($orderStatus) === 'CANCELLED' && strtoupper($action) === 'UPDATE') {
+            // Kembalikan stok jika pesanan dibatalkan
+            $newStock = $oldStock + $quantity;
+            Log::info("📊 Restoring stock due to cancelled order: {$sku} ({$oldStock} → {$newStock})");
+        }
+        
+        // Pastikan stok tidak negatif
+        $newStock = max(0, $newStock);
+        
+        // Update stok jika ada perubahan
+        if ($newStock !== $oldStock) {
+            $product->stock_quantity = $newStock;
+            $product->ginee_last_sync = now();
+            $product->save();
+            
+            Log::info("✅ Stock updated for order: {$sku} ({$oldStock} → {$newStock})");
+            return true;
+        }
+        
+        return false;
+        
+    } catch (\Exception $e) {
+        Log::error("❌ Failed to update stock: {$e->getMessage()}", [
+            'sku' => $sku,
+            'quantity' => $quantity,
+            'status' => $orderStatus
+        ]);
+        
+        return false;
+    }
+}
 
     /* ===================== HELPER METHODS ===================== */
 
