@@ -527,4 +527,8 @@ Route::group(['prefix' => 'integrations/ginee', 'middleware' => ['auth', 'web']]
     Route::post('/compare-methods', [App\Http\Controllers\Frontend\GineeSyncController::class, 'compareAllMethods']);
 });
 
-
+Route::prefix('promo')->name('promo.')->group(function () {
+    Route::get('/onedecade', [App\Http\Controllers\Frontend\PromoController::class, 'showOneDecade'])->name('onedecade');
+    Route::get('/onedecade/result', [App\Http\Controllers\Frontend\PromoController::class, 'showOneDecadeResult'])->name('onedecade.result');
+    Route::post('/onedecade/verify', [App\Http\Controllers\Frontend\PromoController::class, 'verifyOneDecade'])->name('onedecade.verify');
+});

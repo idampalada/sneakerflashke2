@@ -1853,7 +1853,7 @@ function mobileMenuDropdown() {
         <!-- Phone - TETAP RATA -->
         <div class="flex items-center space-x-2">
             <i class="fas fa-phone text-gray-300 flex-shrink-0 text-xs w-3 text-center"></i>
-            <a href="tel:0812345678" class="text-gray-300 hover:text-white">0812345678</a>
+            <a href="tel:081313911391" class="text-gray-300 hover:text-white">081313911391</a>
         </div>
         
         <!-- Email - SEKARANG RATA -->
@@ -2049,7 +2049,7 @@ function mobileMenuDropdown() {
 </style>
 <!-- WhatsApp Floating Button -->
 <div id="whatsapp-button" class="whatsapp-float-btn">
-    <a href="https://wa.me/6281287809468?text=Halo%20SneakerFlash!%20Saya%20ingin%20bertanya%20tentang%20produk%20sneakers" 
+    <a href="https://wa.me/6281313911391?text=Halo%20SneakerFlash!%20Saya%20ingin%20bertanya%20tentang%20produk%20sneakers" 
        target="_blank" 
        rel="noopener noreferrer"
        class="whatsapp-btn-link">

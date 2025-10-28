@@ -206,7 +206,7 @@
                 <p>If you have questions about these Terms of Service, please contact us at:</p>
                 <p>
                     Email: hello@sneakersflash.com<br>
-                    Phone: 081287809468<br>
+                    Phone: 081313911391<br>
                     Address: West Jakarta, Indonesia
                 </p>
 
@@ -315,7 +315,7 @@
                 <p>If you have questions about this Privacy Policy or your personal information, contact us at:</p>
                 <p>
                     Email: privacy@sneakersflash.com<br>
-                    Phone: 081287809468<br>
+                    Phone: 081313911391<br>
                     Address: West Jakarta, Indonesia
                 </p>
 
