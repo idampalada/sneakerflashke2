@@ -6,6 +6,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\URL;
 use App\Models\Order;
 use App\Observers\OrderObserver;
+use App\Services\PromoSpreadsheetService;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -15,9 +16,13 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(\App\Services\GineeClient::class, function () {
-        return new \App\Services\GineeClient(); // config diambil dari config/services.php
-    });
-        //
+            return new \App\Services\GineeClient(); // config diambil dari config/services.php
+        });
+        
+        // Daftarkan layanan PromoSpreadsheetService
+        $this->app->singleton(PromoSpreadsheetService::class, function ($app) {
+            return new PromoSpreadsheetService();
+        });
     }
 
     /**

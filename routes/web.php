@@ -531,4 +531,10 @@ Route::prefix('promo')->name('promo.')->group(function () {
     Route::get('/onedecade', [App\Http\Controllers\Frontend\PromoController::class, 'showOneDecade'])->name('onedecade');
     Route::get('/onedecade/result', [App\Http\Controllers\Frontend\PromoController::class, 'showOneDecadeResult'])->name('onedecade.result');
     Route::post('/onedecade/verify', [App\Http\Controllers\Frontend\PromoController::class, 'verifyOneDecade'])->name('onedecade.verify');
+
+        // TAMBAHKAN: Route untuk testing spreadsheet connection
+    Route::get('/onedecade/test-spreadsheet', [App\Http\Controllers\Frontend\PromoController::class, 'testSpreadsheetConnection'])->name('onedecade.test-spreadsheet');
+    Route::get('/onedecade/view-csv', [App\Http\Controllers\Frontend\PromoController::class, 'viewSpreadsheetCsv'])->name('onedecade.view-csv');
 });
+
+
