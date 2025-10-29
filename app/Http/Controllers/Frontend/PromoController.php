@@ -340,113 +340,110 @@ private function fetchSpreadsheetData()
 public function getPromoStats()
 {
     try {
-        // PENTING: Tambahkan ini di awal untuk memeriksa database
-        if (Schema::hasTable('promo_onedecade_entries')) {
-            // Hitung peserta dari database
-            $databaseEntries = DB::table('promo_onedecade_entries')->count();
-            Log::info('Database entries: ' . $databaseEntries);
-        } else {
-            $databaseEntries = 0;
-        }
-        
-        // Ambil data dari spreadsheet
         $rawContent = $this->fetchSpreadsheetData();
-        
-        // Inisialisasi nilai default ke 0
-        $spreadsheetParticipantCount = 16; // Default jika tidak bisa membaca
-        $spreadsheetTotalKupon = 27;      // Default dari spreadsheet Anda
-        
+
+        // Fallback bila parsing gagal
+        $participantCount = 16;
+        $activeNumbers    = 27;
+
         if (!empty($rawContent)) {
-            // Parse HTML content
-            $dom = new \DOMDocument();
-            @$dom->loadHTML($rawContent);
-            $tables = $dom->getElementsByTagName('table');
-            
-            if ($tables->length > 0) {
-                $table = $tables->item(0);
-                $rows = $table->getElementsByTagName('tr');
-                
-                // Cari header row untuk mendapatkan indeks kolom
-                $headerRow = $rows->item(3); // Baris ke-4 (indeks 3)
-                if ($headerRow) {
-                    $headerCells = $headerRow->getElementsByTagName('td');
-                    
-                    // Cari indeks kolom JUMLAH KUPON
-                    $jumlahKuponIndex = -1;
-                    for ($i = 0; $i < $headerCells->length; $i++) {
-                        if (trim($headerCells->item($i)->textContent) === 'JUMLAH KUPON') {
-                            $jumlahKuponIndex = $i;
-                            break;
-                        }
-                    }
-                    
-                    // Jika tidak ditemukan, gunakan default (8)
-                    if ($jumlahKuponIndex === -1) {
-                        $jumlahKuponIndex = 8; // Column I
-                    }
-                    
-                    // Reset nilai untuk hitung ulang
-                    $tempParticipantCount = 0;
-                    $tempTotalKupon = 0;
-                    
-                    // Mulai dari baris setelah header (baris ke-5, indeks 4)
-                    for ($i = 4; $i < $rows->length; $i++) {
-                        $row = $rows->item($i);
-                        $cells = $row->getElementsByTagName('td');
-                        
-                        // Skip jika baris tidak memiliki cukup kolom
-                        if ($cells->length <= $jumlahKuponIndex) {
-                            continue;
-                        }
-                        
-                        // Kolom No Pesanan (indeks 4)
-                        $noPesanan = trim($cells->item(4)->textContent);
-                        
-                        if (!empty($noPesanan) && $noPesanan !== '0' && $noPesanan !== '-') {
-                            $tempParticipantCount++;
-                            
-                            // Kolom JUMLAH KUPON
-                            $jumlahKupon = trim($cells->item($jumlahKuponIndex)->textContent);
-                            
-                            if (is_numeric($jumlahKupon) && (int)$jumlahKupon > 0) {
-                                $tempTotalKupon += (int)$jumlahKupon;
-                            }
-                        }
-                    }
-                    
-                    // Gunakan nilai yang dihitung jika lebih dari 0
-                    if ($tempParticipantCount > 0) {
-                        $spreadsheetParticipantCount = $tempParticipantCount;
-                    }
-                    
-                    if ($tempTotalKupon > 0) {
-                        $spreadsheetTotalKupon = $tempTotalKupon;
-                    }
+            // Ambil semua baris <tr>
+            preg_match_all('/<tr[^>]*>(.*?)<\/tr>/si', $rawContent, $rowMatches);
+            $rows     = $rowMatches[1] ?? [];
+            $rowCount = count($rows);
+
+            // Deteksi indeks kolom (dinamis), fallback ke E (No Pesanan) & I (JUMLAH KUPON)
+            $noPesananIndex = null;
+            $jumlahKuponIndex = null;
+            $dataStartRow = 4;
+
+            for ($i = 0; $i < min(12, $rowCount); $i++) {
+                preg_match_all('/<td[^>]*>(.*?)<\/td>/si', $rows[$i], $cellMatchesHeader);
+                $headerCells = array_map(fn($v) => trim(strip_tags(html_entity_decode($v))), $cellMatchesHeader[1] ?? []);
+                foreach ($headerCells as $idx => $text) {
+                    if ($text === 'No Pesanan' || $text === 'NO PESANAN') $noPesananIndex = $idx;
+                    if ($text === 'JUMLAH KUPON') $jumlahKuponIndex = $idx;
+                }
+                if ($noPesananIndex !== null && $jumlahKuponIndex !== null) {
+                    $dataStartRow = $i + 1;
+                    break;
                 }
             }
+
+            if ($noPesananIndex === null)   $noPesananIndex   = 4; // kolom E
+            if ($jumlahKuponIndex === null) $jumlahKuponIndex = 8; // kolom I
+
+            $rowsSeen  = 0;
+            $rowsValid = 0;
+            $participants = 0;
+            $totalKupon   = 0;
+            $sample = [];
+            $kuponValuesSample = [];
+
+            for ($r = $dataStartRow; $r < $rowCount; $r++) {
+                preg_match_all('/<td[^>]*>(.*?)<\/td>/si', $rows[$r], $cellMatches);
+                $cells = $cellMatches[1] ?? [];
+                $rowsSeen++;
+
+                if (count($cells) <= max($jumlahKuponIndex, $noPesananIndex)) continue;
+
+                $noPesananRaw   = strip_tags(html_entity_decode($cells[$noPesananIndex]   ?? ''));
+                $jumlahKuponRaw = strip_tags(html_entity_decode($cells[$jumlahKuponIndex] ?? ''));
+
+                $noPesanan = preg_replace('/\s+/', '', trim($noPesananRaw));
+                $jumlahKuponNum = (int) preg_replace('/[^0-9\-]/', '', $jumlahKuponRaw);
+
+                if ($noPesanan !== '' && $noPesanan !== '0' && $noPesanan !== '-' && $jumlahKuponNum > 0) {
+                    $rowsValid++;
+                    $participants++;             // tiap baris dengan kupon > 0
+                    $totalKupon += $jumlahKuponNum; // ← SUM JUMLAH KUPON
+
+                    if (count($sample) < 10) $sample[] = ['no_pesanan' => $noPesanan, 'kupon' => $jumlahKuponNum];
+                    if (count($kuponValuesSample) < 20) $kuponValuesSample[] = $jumlahKuponNum;
+                }
+            }
+
+            if ($participants > 0) $participantCount = $participants;
+            $activeNumbers = $totalKupon; // ← pakai SUM kupon
+
+            \Log::info('PromoStats parsed (sum kupon)', [
+                'rows_total_found'   => $rowCount,
+                'data_start_row'     => $dataStartRow,
+                'no_pesanan_index'   => $noPesananIndex,
+                'jumlah_kupon_index' => $jumlahKuponIndex,
+                'rows_seen'          => $rowsSeen,
+                'rows_valid_kupon>0' => $rowsValid,
+                'participants'       => $participantCount,
+                'sum_jumlah_kupon'   => $activeNumbers,
+                'kupon_values_sample'=> $kuponValuesSample,
+                'sample_first_10'    => $sample,
+            ]);
+
+            // Fallback bila kosong total
+            if ($participantCount <= 0) $participantCount = 16;
+            if ($activeNumbers   <= 0) $activeNumbers    = 27;
         }
-        
-        // Jumlahkan hasil dari spreadsheet dan database
-        $totalParticipantCount = $spreadsheetParticipantCount + $databaseEntries;
-        
+
         return [
-            'participantCount' => $totalParticipantCount,
-            'activeNumbers' => $spreadsheetTotalKupon,
-            'lastUpdated' => now()
+            'participantCount' => $participantCount,
+            'activeNumbers'    => $activeNumbers,
+            'lastUpdated'      => now(),
         ];
     } catch (\Exception $e) {
-        Log::error('Error calculating promo stats: ' . $e->getMessage(), [
+        \Log::error('Error calculating promo stats: '.$e->getMessage(), [
             'trace' => $e->getTraceAsString()
         ]);
-        
-        // Gunakan nilai default yang lebih masuk akal
+
         return [
-            'participantCount' => 16, // Nilai dari spreadsheet
-            'activeNumbers' => 27,    // Nilai dari spreadsheet
-            'lastUpdated' => now()
+            'participantCount' => 16,
+            'activeNumbers'    => 27,
+            'lastUpdated'      => now(),
         ];
     }
 }
+
+
+
     
     /**
      * Tampilkan halaman result promo One Decade
