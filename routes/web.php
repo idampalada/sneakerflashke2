@@ -535,6 +535,14 @@ Route::prefix('promo')->name('promo.')->group(function () {
         // TAMBAHKAN: Route untuk testing spreadsheet connection
     Route::get('/onedecade/test-spreadsheet', [App\Http\Controllers\Frontend\PromoController::class, 'testSpreadsheetConnection'])->name('onedecade.test-spreadsheet');
     Route::get('/onedecade/view-csv', [App\Http\Controllers\Frontend\PromoController::class, 'viewSpreadsheetCsv'])->name('onedecade.view-csv');
+
+    
 });
 
+
+   Route::get('/debug-undian/{code}/{order}/{platform}', function ($code, $order, $platform) {
+       $controller = new \App\Http\Controllers\Frontend\PromoController();
+       // Perlu membuat method public untuk testing
+       return $controller->debugValidateUndian($code, $order, $platform);
+   });
 
