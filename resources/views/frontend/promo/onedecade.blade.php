@@ -6,27 +6,29 @@
     <title>One Decade Promo - SneakerFlash</title>
     
     <style>
+        /* CHANGED: izinkan scroll halaman dan tetap responsif penuh tinggi */
         html, body {
             margin: 0;
             padding: 0;
             width: 100%;
-            height: 100vh;
-            overflow: hidden; /* Penting: mencegah scrolling */
+            min-height: 100vh;           /* CHANGED: dari height: 100vh */
+            overflow-x: hidden;          /* CHANGED: hanya kunci sumbu X */
+            /* overflow-y otomatis => halaman bisa discroll ke section 2 */
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             background-color: #03245b;
         }
         
-        /* Container utama - menutupi seluruh layar */
+        /* SECTION 1: Container utama - tetap fullscreen */
         .promo-container {
             width: 100%;
-            height: 100vh;
+            height: 100vh;               /* tetap satu layar penuh */
             position: relative;
             display: flex;
             align-items: center;
             justify-content: center;
         }
         
-        /* Dekorasi samping */
+        /* Dekorasi samping / background */
         .side-decoration {
             position: absolute;
             top: 0;
@@ -34,9 +36,7 @@
             width: 100%;
             height: 100%;
             z-index: 1;
-            /* Gradient biru radial dari tengah ke tepi */
             background: radial-gradient(circle at center, #03245b, #021636);
-            /* Efek konfeti */
             background-image: 
                 radial-gradient(circle, #ffffff10 1px, transparent 1px),
                 radial-gradient(circle, #ffffff08 2px, transparent 2px),
@@ -47,27 +47,25 @@
                 90px 90px;
         }
         
-        /* Gambar utama dengan "object-fit" untuk menjaga rasio aspek */
+        /* Gambar utama */
         .main-image-container {
             position: relative;
             z-index: 2;
             width: 100%;
             height: 100%;
-            /* Hapus max-width dan max-height agar container selalu 100% layar */
             display: flex;
             align-items: center;
             justify-content: center;
         }
         
         .main-image {
-            width: 100%;  /* Paksa lebar penuh container */
-            height: 100%; /* Paksa tinggi penuh container */
-            object-fit: fill; /* Ubah ke 'contain' untuk menghindari crop atas/bawah, menjaga seluruh gambar terlihat */
+            width: 100%;
+            height: 100%;
+            object-fit: fill;            /* sama seperti file asli */
             display: block;
-            /* Hapus max-width, max-height, dan width/height auto agar gambar selalu memenuhi */
         }
         
-        /* Overlay untuk logo dan button */
+        /* Overlay untuk logo / tombol */
         .content-overlay {
             position: absolute;
             top: 0;
@@ -75,16 +73,16 @@
             width: 100%;
             height: 100%;
             z-index: 3;
-            pointer-events: none; /* Penting: memastikan klik diteruskan ke button */
+            pointer-events: none;
         }
         
         .verify-button-container {
             position: absolute;
-            bottom: -8%; /* Sesuai dengan permintaan: tombol diposisikan ke bawah */
+            bottom: -8%;
             left: 0;
             right: 0;
             text-align: center;
-            pointer-events: auto; /* Memastikan button bisa diklik */
+            pointer-events: auto;
             cursor: pointer;
             transition: transform 0.3s;
         }
@@ -196,11 +194,10 @@
             align-items: center;
         }
         
-        /* Ukuran gambar notifikasi - FIXED SIZE untuk menghindari zoom */
         #notificationImage {
-            width: 450px; /* Ukuran tetap */
+            width: 450px;
             height: auto;
-            max-width: 80%; /* Batasi lebar maksimum pada layar kecil */
+            max-width: 80%;
             cursor: pointer;
         }
         
@@ -215,29 +212,53 @@
             }
             
             #notificationImage {
-                width: 350px; /* Sedikit lebih kecil untuk mobile */
+                width: 350px;
             }
+        }
+
+        /* NEW: SECTION 2 (fullscreen) */
+        .promo-section {
+            width: 100%;
+            height: 100vh;               /* satu layar penuh */
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .promo-section .main-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;           /* tampil penuh rapi */
+            display: block;
         }
     </style>
 </head>
 <body>
+    <!-- SECTION 1 (halaman asli) -->
     <div class="promo-container">
-        <!-- Dekorasi samping sebagai background -->
         <div class="side-decoration"></div>
         
-        <!-- Container gambar utama -->
         <div class="main-image-container">
             <img src="/images/bgcampaignsf.jpg" alt="One Decade Promo" class="main-image">
         </div>
         
-        <!-- Overlay untuk konten -->
         <div class="content-overlay">
-            <!-- Verification button as image (dipindahkan ke bawah) -->
             <div class="verify-button-container" id="verifyBtn">
                 <img src="/images/buttonremovebg.png" alt="Verifikasi Sekarang" class="verify-button-img">
             </div>
         </div>
     </div>
+
+    <!-- NEW: SECTION 2 (ditambahkan setelah SECTION 1) -->
+    <section class="promo-section" id="section-2">
+        <div class="side-decoration"></div>
+        <div class="main-image-container">
+            <img src="/images/bgcampaignsf2.png" alt="One Decade Promo - Bagian 2" class="main-image">
+        </div>
+        <div class="content-overlay">
+            <!-- Tempatkan konten tambahan di sini jika diperlukan -->
+        </div>
+    </section>
     
     <!-- Form Verifikasi -->
     <div id="verificationContainer" class="verification-container" style="display:none;">
@@ -277,12 +298,12 @@
         </div>
     </div>
     
-    <!-- Notification Image Overlay - akan menampilkan gambar notifikasi dengan ukuran tetap -->
+    <!-- Notification Image Overlay -->
     <div id="notificationOverlay" style="display:none;">
         <img id="notificationImage" src="" alt="Notification">
     </div>
     
-    <!-- JavaScript untuk interaksi -->
+    <!-- JavaScript -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Elements
@@ -291,12 +312,12 @@
             const notificationOverlay = document.getElementById('notificationOverlay');
             const notificationImage = document.getElementById('notificationImage');
             
-            // Show verification form
+            // Show verification form (tetap sama seperti file asli)
             verifyBtn.addEventListener('click', function() {
                 verificationContainer.style.display = 'flex';
             });
             
-            // Hide verifications when clicking outside
+            // Hide verification when clicking outside
             verificationContainer.addEventListener('click', function(e) {
                 if (e.target === verificationContainer) {
                     verificationContainer.style.display = 'none';
@@ -309,14 +330,12 @@
                 verificationContainer.style.display = 'none';
             });
             
-            // Check for verification status from session
+            // Blade session status (tetap sama)
             @if(session('verification_status') === 'success')
-                // Tampilkan notifikasi sukses
                 notificationImage.src = '/images/kuponsukses.png';
                 notificationOverlay.style.display = 'flex';
                 verificationContainer.style.display = 'none';
             @elseif(session('verification_status') === 'error')
-                // Tampilkan notifikasi error
                 notificationImage.src = '/images/kuponused.png';
                 notificationOverlay.style.display = 'flex';
                 verificationContainer.style.display = 'none';
