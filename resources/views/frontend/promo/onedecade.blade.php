@@ -6,29 +6,27 @@
     <title>One Decade Promo - SneakerFlash</title>
     
     <style>
-        /* CHANGED: izinkan scroll halaman dan tetap responsif penuh tinggi */
+        /* Reset dan dasar */
         html, body {
             margin: 0;
             padding: 0;
             width: 100%;
-            min-height: 100vh;           /* CHANGED: dari height: 100vh */
-            overflow-x: hidden;          /* CHANGED: hanya kunci sumbu X */
-            /* overflow-y otomatis => halaman bisa discroll ke section 2 */
+            min-height: 100vh;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             background-color: #03245b;
+            overflow-x: hidden;
         }
         
-        /* SECTION 1: Container utama - tetap fullscreen */
+        /* SECTION 1: Wrapper utama */
         .promo-container {
             width: 100%;
-            height: 100vh;               /* tetap satu layar penuh */
+            padding: 0;
+            background-color: #03245b;
             position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            overflow: hidden;
         }
         
-        /* Dekorasi samping / background */
+        /* Background dekorasi */
         .side-decoration {
             position: absolute;
             top: 0;
@@ -47,41 +45,34 @@
                 90px 90px;
         }
         
-        /* Gambar utama */
+        /* Container gambar utama */
         .main-image-container {
             position: relative;
             z-index: 2;
             width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
         
+        /* Gambar utama - full width */
         .main-image {
-            width: 100%;
-            height: 100%;
-            object-fit: fill;            /* sama seperti file asli */
             display: block;
+            width: 100%;
+            height: auto;
         }
         
-        /* Overlay untuk logo / tombol */
+        /* Container untuk konten overlay */
         .content-overlay {
             position: absolute;
-            top: 0;
+            bottom: -35px; /* Posisi dari bawah - DISESUAIKAN */
             left: 0;
             width: 100%;
-            height: 100%;
             z-index: 3;
+            display: flex;
+            justify-content: center;
             pointer-events: none;
         }
         
+        /* Container tombol verifikasi */
         .verify-button-container {
-            position: absolute;
-            bottom: -8%;
-            left: 0;
-            right: 0;
-            text-align: center;
             pointer-events: auto;
             cursor: pointer;
             transition: transform 0.3s;
@@ -91,6 +82,7 @@
             transform: translateY(-5px);
         }
         
+        /* Gambar tombol */
         .verify-button-img {
             width: 300px;
             max-width: 30vw;
@@ -201,10 +193,223 @@
             cursor: pointer;
         }
         
-        /* Responsive adjustments */
+        /* SECTION 2: Full width */
+        .promo-section {
+            width: 100%;
+            position: relative;
+            padding: 40px 0;
+            background-color: #03245b;
+        }
+        
+        /* Background image section 2 */
+        .bg-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+        }
+        
+        /* Konten section 2 */
+        .section-content {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        /* Result box styling */
+        .result-container {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+        }
+        
+        .result-box {
+            background-color: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+        
+        .result-box h1 {
+            font-size: 28px;
+            margin-top: 0;
+            margin-bottom: 30px;
+            color: #333;
+        }
+        
+        /* Simplified stats display */
+        .participants-number {
+            font-size: 72px;
+            font-weight: 900;
+            color: #e32119;
+            margin: 20px 0 10px;
+            line-height: 1;
+        }
+        
+        .active-numbers {
+            font-size: 18px;
+            margin-bottom: 30px;
+            color: #333;
+        }
+        
+        
+        .success-message {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .entry-number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #e32119;
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            border: 3px dashed #e32119;
+            border-radius: 8px;
+            background-color: #fff9f9;
+        }
+        
+        .result-promo-section {
+            margin: 30px 0;
+            padding: 25px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+        }
+        
+        .result-promo-section h2 {
+            font-size: 24px;
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .time-section {
+            margin-top: 30px;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            color: white;
+            padding: 15px;
+        }
+        
+        /* Buttons */
+        .btn-white, .btn-calendar {
+            padding: 12px 25px;
+            border-radius: 30px;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px;
+            font-size: 16px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-white {
+            background-color: white;
+            color: #e32119;
+            border: 1px solid #e32119;
+        }
+        
+        .btn-calendar {
+            background-color: #4285F4;
+            color: white;
+            border: 1px solid #4285F4;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .btn-calendar img {
+            width: 20px;
+            height: 20px;
+        }
+        
+        .btn-white:hover, .btn-calendar:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        
+        /* Countdown Timer */
+        .countdown-container {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            margin: 30px 0 10px;
+            gap: 10px;
+        }
+        
+        .countdown-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-width: 65px;
+            width: 20%;
+            max-width: 100px;
+        }
+        
+        .countdown-value {
+            background-color: white;
+            color: black;
+            font-size: 42px;
+            font-weight: 900;
+            line-height: 1;
+            width: 100%;
+            height: 80px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            margin-bottom: 10px;
+        }
+        
+        .countdown-label {
+            color: white;
+            font-size: 18px;
+            font-weight: 500;
+            text-align: center;
+        }
+        
+        /* Responsive */
         @media (max-width: 768px) {
             .verify-button-img {
                 width: 250px;
+            }
+            
+            .result-box {
+                padding: 20px;
+            }
+            
+            .participants-number {
+                font-size: 56px;
+            }
+
+            
+            .countdown-value {
+                font-size: 32px;
+                height: 65px;
+            }
+            
+            .countdown-label {
+                font-size: 14px;
             }
             
             .verification-form h1 {
@@ -214,49 +419,105 @@
             #notificationImage {
                 width: 350px;
             }
-        }
-
-        /* NEW: SECTION 2 (fullscreen) */
-        .promo-section {
-            width: 100%;
-            height: 100vh;               /* satu layar penuh */
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .promo-section .main-image {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;           /* tampil penuh rapi */
-            display: block;
+            
+            .content-overlay {
+                bottom: 50px; /* Adjusted for mobile */
+            }
         }
     </style>
 </head>
 <body>
-    <!-- SECTION 1 (halaman asli) -->
+    <!-- SECTION 1: Full width image -->
     <div class="promo-container">
         <div class="side-decoration"></div>
         
         <div class="main-image-container">
             <img src="/images/bgcampaignsf.jpg" alt="One Decade Promo" class="main-image">
-        </div>
-        
-        <div class="content-overlay">
-            <div class="verify-button-container" id="verifyBtn">
-                <img src="/images/buttonremovebg.png" alt="Verifikasi Sekarang" class="verify-button-img">
+            
+            <div class="content-overlay">
+                <div class="verify-button-container" id="verifyBtn">
+                    <img src="/images/buttonremovebg.png" alt="Verifikasi Sekarang" class="verify-button-img">
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- NEW: SECTION 2 (ditambahkan setelah SECTION 1) -->
+    <!-- SECTION 2 -->
     <section class="promo-section" id="section-2">
-        <div class="side-decoration"></div>
-        <div class="main-image-container">
-            <img src="/images/bgcampaignsf2.png" alt="One Decade Promo - Bagian 2" class="main-image">
-        </div>
-        <div class="content-overlay">
-            <!-- Tempatkan konten tambahan di sini jika diperlukan -->
+        <img src="/images/bgcampaignsf2.png" alt="One Decade Promo - Bagian 2" class="bg-image">
+        
+        <div class="section-content">
+            <div class="result-container">
+                @if(session('success'))
+                <div class="success-message">
+                    {{ session('success') }}
+                </div>
+                @endif
+                
+                @if(session('entry_number'))
+                <div class="entry-number">
+                    Nomor Undian: {{ session('entry_number') }}
+                </div>
+                @endif
+                
+                <div class="result-box">
+                    <!-- Header dengan Statistik -->
+                    <h1>Total Peserta Undian Saat Ini</h1>
+                    
+                    <!-- Simplified stats display -->
+                    <div class="participants-number">{{ $participantCount }} Peserta</div>
+                    <div class="active-numbers">{{ $activeNumbers }} Nomor Undian Aktif</div>
+                    
+                    <!-- Tanggal Pengundian -->
+                    <div class="result-promo-section">
+                        <h2>
+                            Pengundian Langsung
+                        </h2>
+                        <p style="font-size: 20px; font-weight: bold;">
+                            24 Januari 2026, 12:00 WIB
+                        </p>
+                        
+                        <!-- Countdown Timer -->
+                        <div class="countdown-container">
+                            <div class="countdown-item">
+                                <div class="countdown-value" id="days">86</div>
+                                <div class="countdown-label">Hari</div>
+                            </div>
+                            
+                            <div class="countdown-item">
+                                <div class="countdown-value" id="hours">0</div>
+                                <div class="countdown-label">Jam</div>
+                            </div>
+                            
+                            <div class="countdown-item">
+                                <div class="countdown-value" id="minutes">14</div>
+                                <div class="countdown-label">Menit</div>
+                            </div>
+                            
+                            <div class="countdown-item">
+                                <div class="countdown-value" id="seconds">15</div>
+                                <div class="countdown-label">Detik</div>
+                            </div>
+                        </div>
+                        
+                        <p style="margin-top: 20px;">
+                            Pengundian berlangsung Live di IG & TikTok @sneakers_flash.
+Be ready, peeps.
+                        </p>
+                        
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 20px;">
+                            <a href="https://www.instagram.com/sneakers_flash/" target="_blank" class="btn-white">
+                                Ikuti Instagram Kami
+                            </a>
+                            
+                            <a href="#" id="calendarBtn" class="btn-calendar">
+                                <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCI+PHBhdGggZD0iTTAgMGgyNHYyNEgwVjB6IiBmaWxsPSJub25lIi8+PHBhdGggZD0iTTE5IDRoLTFWM2MwLS41NS0uNDUtMS0xLTFzLTEgLjQ1LTEgMXYxSDhWM2MwLS41NS0uNDUtMS0xLTFzLTEgLjQ1LTEgMXYxSDVjLTEuMTEgMC0xLjk5LjktMS45OSAyTDMgMjBjMCAxLjEuODkgMiAyIDJoMTRjMS4xIDAgMi0uOSAyLTJWNmMwLTEuMS0uOS0yLTItMnptLTEgMTZINmMtLjU1IDAtMS0uNDUtMS0xVjloMTR2MTBjMCAuNTUtLjQ1IDEtMSAxeiIvPjwvc3ZnPg==" alt="Calendar Icon">
+                                Set Reminder
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </section>
     
@@ -303,6 +564,11 @@
         <img id="notificationImage" src="" alt="Notification">
     </div>
     
+    <!-- Footer Simple -->
+    <div class="footer">
+        <p>© {{ date('Y') }} SneakerFlash. All rights reserved.</p>
+    </div>
+    
     <!-- JavaScript -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -311,8 +577,9 @@
             const verificationContainer = document.getElementById('verificationContainer');
             const notificationOverlay = document.getElementById('notificationOverlay');
             const notificationImage = document.getElementById('notificationImage');
+            const calendarBtn = document.getElementById('calendarBtn');
             
-            // Show verification form (tetap sama seperti file asli)
+            // Show verification form
             verifyBtn.addEventListener('click', function() {
                 verificationContainer.style.display = 'flex';
             });
@@ -330,7 +597,60 @@
                 verificationContainer.style.display = 'none';
             });
             
-            // Blade session status (tetap sama)
+            // Set Google Calendar Reminder
+            calendarBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Format for Google Calendar URL
+                const eventTitle = encodeURIComponent('Pengundian Langsung SneakerFlash');
+                const eventDetails = encodeURIComponent('Pengundian hadiah SneakerFlash One Decade Promo. Tonton di Instagram Live @sneakers_flash untuk melihat siapa pemenang undian!');
+                const eventLocation = encodeURIComponent('Instagram Live (@sneakers_flash)');
+                
+                // 24 Januari 2026, 12:00-13:00 WIB
+                const startDateTime = encodeURIComponent('20260124T050000Z'); // 12:00 WIB in UTC
+                const endDateTime = encodeURIComponent('20260124T060000Z');   // 13:00 WIB in UTC
+                
+                // Create Google Calendar URL
+                const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${eventTitle}&dates=${startDateTime}/${endDateTime}&details=${eventDetails}&location=${eventLocation}`;
+                
+                // Open in new tab
+                window.open(googleCalendarUrl, '_blank');
+            });
+            
+            // Countdown Timer
+            const countdownDate = new Date('January 24, 2026 12:00:00').getTime();
+            
+            // Update the countdown every second
+            const countdown = setInterval(function() {
+                // Get today's date and time
+                const now = new Date().getTime();
+                
+                // Find the time remaining between now and the countdown date
+                const timeRemaining = countdownDate - now;
+                
+                // Calculate days, hours, minutes, and seconds
+                const days = Math.floor(timeRemaining / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((timeRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
+                
+                // Display the result
+                document.getElementById('days').textContent = days;
+                document.getElementById('hours').textContent = hours;
+                document.getElementById('minutes').textContent = minutes;
+                document.getElementById('seconds').textContent = seconds;
+                
+                // If the countdown is over, display a message
+                if (timeRemaining < 0) {
+                    clearInterval(countdown);
+                    document.getElementById('days').textContent = "0";
+                    document.getElementById('hours').textContent = "0";
+                    document.getElementById('minutes').textContent = "0";
+                    document.getElementById('seconds').textContent = "0";
+                }
+            }, 1000);
+            
+            // Blade session status
             @if(session('verification_status') === 'success')
                 notificationImage.src = '/images/kuponsukses.png';
                 notificationOverlay.style.display = 'flex';
