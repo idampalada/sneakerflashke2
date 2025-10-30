@@ -67,7 +67,7 @@ class PromoController extends Controller
         $request->validate([
             'undian_code' => 'required|string|max:50',
             'order_number' => 'required|string|max:50',
-            'contact_info' => 'required|string|max:100',
+            'contact_info' => 'required|regex:/^[0-9+\-\s\(\)]{10,}$/',
             'platform' => 'required|string',
         ]);
         
@@ -103,20 +103,13 @@ class PromoController extends Controller
             
             // 3. Simpan data ke database jika validasi berhasil dan data belum ada
             
-            // Membersihkan contact info (email/no hp)
-            $cleanContact = $request->contact_info;
-            if (preg_match('/^[0-9+\s]+$/', $request->contact_info)) {
-                // Jika berisi angka, anggap sebagai nomor telepon
-                $cleanContact = preg_replace('/[^0-9+]/', '', $request->contact_info);
-                
-                // Jika nomor dimulai dengan 0, ubah ke format +62
-                if (substr($cleanContact, 0, 1) === '0') {
-                    $cleanContact = '+62' . substr($cleanContact, 1);
-                }
-            } else {
-                // Jika email, trim dan lowercase
-                $cleanContact = strtolower(trim($request->contact_info));
-            }
+// Membersihkan contact info (nomor handphone saja)
+$cleanContact = preg_replace('/[^0-9+]/', '', $request->contact_info);
+
+// Jika nomor dimulai dengan 0, ubah ke format +62
+if (substr($cleanContact, 0, 1) === '0') {
+    $cleanContact = '+62' . substr($cleanContact, 1);
+}
             
             // Uppercase undian code
             $undianCode = strtoupper(trim($request->undian_code));

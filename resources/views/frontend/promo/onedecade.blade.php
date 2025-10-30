@@ -537,9 +537,11 @@ Be ready, peeps.
                     <input type="text" name="order_number" placeholder="Nomor Pesanan" required>
                 </div>
                 
-                <div class="form-input">
-                    <input type="text" name="contact_info" placeholder="Email / No HP (untuk konfirmasi pemenang)" required>
-                </div>
+<div class="form-input">
+    <input type="tel" name="contact_info" placeholder="Nomor Handphone (untuk konfirmasi pemenang)" 
+           pattern="[0-9+\-\s\(\)]{10,}" title="Masukkan nomor handphone valid minimal 10 digit" 
+           required>
+</div>
                 
                 <div class="form-input">
                     <select name="platform" required>
