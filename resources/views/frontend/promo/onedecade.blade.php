@@ -69,7 +69,7 @@
         /* Container untuk konten overlay */
         .content-overlay {
             position: absolute;
-            bottom: 55px; /* Posisi dari bawah - DIPINDAH KE BAWAH */
+            bottom: -45px; /* Posisi dari bawah - DIPINDAH KE BAWAH */
             left: 0;
             width: 100%;
             z-index: 3;
