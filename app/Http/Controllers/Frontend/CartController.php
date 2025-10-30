@@ -26,9 +26,23 @@ class CartController extends Controller
         return view('frontend.cart.index', compact('cartItems', 'total'));
     }
 
-    public function add(Request $request, $productId = null)
+public function add(Request $request, $productId = null)
 {
     try {
+        // TAMBAHKAN KODE INI DI AWAL METODE
+        // Check if user is authenticated for AJAX requests
+        if (!Auth::check() && $request->ajax()) {
+            // For AJAX requests, return a JSON response with redirect URL
+            return response()->json([
+                'success' => false,
+                'redirect' => route('login'),
+                'message' => 'Please login to add items to cart'
+            ], 401);
+        } else if (!Auth::check()) {
+            // For non-AJAX requests, redirect to login
+            return redirect()->route('login');
+        }
+        
         // Get product ID
         if (!$productId) {
             $productId = $request->input('product_id');

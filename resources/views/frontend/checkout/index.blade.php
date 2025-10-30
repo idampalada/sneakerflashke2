@@ -166,14 +166,14 @@
                             </div>
                             
                             <!-- Birthdate -->
-                            <div class="mb-4">
-                                <label for="birthdate" class="block text-sm font-medium text-gray-700 mb-2">
-                                    <span class="text-gray-400">Optional</span> Birthdate
-                                </label>
-                                <input type="date" name="birthdate" id="birthdate"
-                                       value="{{ old('birthdate', Auth::user()->birthdate ? Auth::user()->birthdate->format('Y-m-d') : '') }}"
-                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
-                            </div>
+<div class="mb-4">
+    <label for="birthdate" class="block text-sm font-medium text-gray-700 mb-2">
+        <span class="text-gray-400">Optional</span> Birthdate
+    </label>
+    <input type="date" name="birthdate" id="birthdate"
+           value="{{ old('birthdate', Auth::check() && Auth::user()->birthdate ? Auth::user()->birthdate->format('Y-m-d') : '') }}"
+           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+</div>
                             
                             @if(!Auth::check())
                                 <!-- Create Account Option -->

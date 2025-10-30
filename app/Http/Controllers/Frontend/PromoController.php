@@ -513,4 +513,33 @@ public function getPromoStats()
            ], 500);
        }
    }
+   public function showOneDecadeVerification()
+{
+    try {
+        // Get stats dari spreadsheet
+        $stats = $this->getPromoStats();
+        
+        // Tetapkan tanggal pengundian
+        $drawDate = Carbon::create(2026, 1, 24, 12, 0, 0);
+        
+        return view('frontend.promo.onedecade_verification', [
+            'participantCount' => $stats['participantCount'],
+            'activeNumbers' => $stats['activeNumbers'],
+            'lastUpdated' => $stats['lastUpdated'],
+            'drawDate' => $drawDate,
+            'igAccount' => '@sneakers_flash'
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error in One Decade verification page: ' . $e->getMessage());
+        
+        // Fallback to default values
+        return view('frontend.promo.onedecade_verification', [
+            'participantCount' => 16,
+            'activeNumbers' => 25,
+            'lastUpdated' => Carbon::now(),
+            'drawDate' => Carbon::create(2026, 1, 24, 12, 0, 0),
+            'igAccount' => '@sneakers_flash'
+        ]);
+    }
+}
 }
