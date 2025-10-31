@@ -609,7 +609,8 @@
                         <h2>Pengundian Langsung</h2>
                         <p style="font-size: 12px; font-weight: bold;">24 Januari 2026, 12:00 WIB</p>
                         
-                        <p style="margin-top: 12px;">Tonton di IG Live @sneakers_flash dan jadi saksi siapa yang menang!</p>
+                        <p style="margin-top: 12px;">Pengundian berlangsung Live di IG & TikTok @sneakers_flash.
+Be ready, peeps.</p>
                         
                         <div style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 15px;">
                             <a href="https://www.instagram.com/sneakers_flash/" target="_blank" class="btn-white">

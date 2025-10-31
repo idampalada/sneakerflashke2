@@ -546,3 +546,7 @@ Route::get('/debug-undian/{code}/{order}/{platform}', function ($code, $order, $
     // Perlu membuat method public untuk testing
     return $controller->debugValidateUndian($code, $order, $platform);
 });
+
+Route::get('/promo/onedecade/finish', function () {
+    return view('frontend.promo.onedecade_finish');
+})->name('promo.onedecade.finish');

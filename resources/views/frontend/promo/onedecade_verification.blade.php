@@ -186,22 +186,44 @@
     </div>
   </div>
 
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const overlay = document.getElementById('notificationOverlay');
-      const image = document.getElementById('notificationImage');
-      if (overlay) {
-        overlay.addEventListener('click', () => overlay.style.display = 'none');
-      }
 
-      @if(session('verification_status') === 'success')
-        image.src = '/images/kuponsukses.png';
-        overlay.style.display = 'flex';
-      @elseif(session('verification_status') === 'error')
-        image.src = '/images/kuponused.png';
-        overlay.style.display = 'flex';
-      @endif
-    });
-  </script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // Get the form
+    const form = document.getElementById('verificationForm');
+    
+    // Add event listener for form submission
+    if (form) {
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Create FormData object
+        const formData = new FormData(form);
+        
+        // Submit the form via AJAX
+        fetch(form.action, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.redirect_url) {
+            // Redirect to the finish page
+            window.location.href = data.redirect_url;
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          // In case of error, submit the form normally
+          form.submit();
+        });
+      });
+    }
+  });
+</script>
+
 </body>
 </html>

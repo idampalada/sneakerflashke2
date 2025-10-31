@@ -62,125 +62,122 @@ class PromoController extends Controller
      * Update: Validasi nomor undian dengan data di spreadsheet
      */
     public function verifyOneDecade(Request $request)
-    {
-        // Validasi input
-        $request->validate([
-            'undian_code' => 'required|string|max:50',
-            'order_number' => 'required|string|max:50',
-            'contact_info' => 'required|regex:/^[0-9+\-\s\(\)]{10,}$/',
-            'platform' => 'required|string',
+{
+    // Validasi input
+    $request->validate([
+        'undian_code' => 'required|string|max:50',
+        'order_number' => 'required|string|max:50',
+        'contact_info' => 'required|regex:/^[0-9+\-\s\(\)]{10,}$/',
+        'platform' => 'required|string',
+    ]);
+    
+    try {
+        // 1. Validasi dengan data spreadsheet
+        $validationResult = $this->validateUndianWithSpreadsheet(
+            $request->undian_code,
+            $request->order_number,
+            $request->platform
+        );
+        
+        if (!$validationResult['success']) {
+            // Jika validasi gagal, redirect ke halaman finish dengan status error
+            session()->flash('verification_status', 'error');
+            session()->flash('error_message', $validationResult['message']);
+            return redirect()->route('promo.onedecade.finish');
+        }
+        
+        // 2. Cek apakah kode sudah pernah digunakan di database
+        if (Schema::hasTable('promo_onedecade_entries')) {
+            $existingEntry = DB::table('promo_onedecade_entries')
+                ->where('undian_code', $request->undian_code)
+                ->where('order_number', $request->order_number)
+                ->first();
+                
+            if ($existingEntry) {
+                // Kode sudah pernah dipakai
+                session()->flash('verification_status', 'error');
+                session()->flash('error_message', 'Kode tidak ditemukan atau sudah dipakai. Cek kembali ya.');
+                return redirect()->route('promo.onedecade.finish');
+            }
+        }
+        
+        // 3. Simpan data ke database jika validasi berhasil dan data belum ada
+        
+        // Membersihkan contact info (nomor handphone saja)
+        $cleanContact = preg_replace('/[^0-9+]/', '', $request->contact_info);
+        
+        // Jika nomor dimulai dengan 0, ubah ke format +62
+        if (substr($cleanContact, 0, 1) === '0') {
+            $cleanContact = '+62' . substr($cleanContact, 1);
+        }
+        
+        // Uppercase undian code
+        $undianCode = strtoupper(trim($request->undian_code));
+        
+        // Tidak perlu generate entry number dengan format SF-YYYY-XXXXXX
+        // Gunakan langsung kode undian asli (undian_code) yang dimasukkan user
+        
+        // Insert data jika tabel sudah ada
+        if (Schema::hasTable('promo_onedecade_entries')) {
+            DB::table('promo_onedecade_entries')->insert([
+                'undian_code' => $undianCode,
+                'order_number' => $request->order_number,
+                'platform' => $request->platform,
+                'contact_info' => $cleanContact,
+                'entry_number' => $undianCode, // Simpan undian_code sebagai entry_number
+                'is_verified' => true,
+                'verified_at' => now(),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        
+        // Set success flash
+        session()->flash('verification_status', 'success');
+        session()->flash('success_message', 'Nomor undian terverifikasi. Good luck, peeps!');
+        session()->flash('undian_code', $undianCode); // Simpan undian_code di session
+        
+        // Return with AJAX if request is AJAX
+        if ($request->ajax()) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Nomor undian terverifikasi. Good luck, peeps!',
+                'redirect_url' => route('promo.onedecade.finish')
+            ]);
+        }
+        
+        // Redirect to finish page
+        return redirect()->route('promo.onedecade.finish');
+        
+    } catch (\Exception $e) {
+        Log::error('Error in One Decade promo verification: ' . $e->getMessage(), [
+            'undian_code' => $request->undian_code ?? 'not provided',
+            'order_number' => $request->order_number ?? 'not provided',
+            'platform' => $request->platform ?? 'not provided',
         ]);
         
-        try {
-            // 1. Validasi dengan data spreadsheet
-            $validationResult = $this->validateUndianWithSpreadsheet(
-                $request->undian_code,
-                $request->order_number,
-                $request->platform
-            );
-            
-            if (!$validationResult['success']) {
-                // Jika validasi gagal, tampilkan notifikasi error
-                session()->flash('verification_status', 'error');
-                session()->flash('error_message', $validationResult['message']);
-                return back()->withInput();
-            }
-            
-            // 2. Jika validasi berhasil, cek apakah data sudah ada di database
-            if (Schema::hasTable('promo_onedecade_entries')) {
-                $existingEntry = DB::table('promo_onedecade_entries')
-                    ->where('undian_code', $request->undian_code)
-                    ->where('order_number', $request->order_number)
-                    ->first();
-                    
-                if ($existingEntry) {
-                    // Jika data sudah ada, tampilkan notifikasi error
-                    session()->flash('verification_status', 'error');
-                    session()->flash('error_message', 'Kode tidak ditemukan atau sudah dipakai. Cek kembali ya.');
-                    return back()->withInput();
-                }
-            }
-            
-            // 3. Simpan data ke database jika validasi berhasil dan data belum ada
-            
-// Membersihkan contact info (nomor handphone saja)
-$cleanContact = preg_replace('/[^0-9+]/', '', $request->contact_info);
-
-// Jika nomor dimulai dengan 0, ubah ke format +62
-if (substr($cleanContact, 0, 1) === '0') {
-    $cleanContact = '+62' . substr($cleanContact, 1);
-}
-            
-            // Uppercase undian code
-            $undianCode = strtoupper(trim($request->undian_code));
-            
-            // Generate a unique entry number
-            $year = date('Y');
-            $random = mt_rand(100000, 999999);
-            $entryNumber = "SF-{$year}-{$random}";
-            
-            // Check if entry number already exists and regenerate if needed
-            if (Schema::hasTable('promo_onedecade_entries')) {
-                while (DB::table('promo_onedecade_entries')->where('entry_number', $entryNumber)->exists()) {
-                    $random = mt_rand(100000, 999999);
-                    $entryNumber = "SF-{$year}-{$random}";
-                }
-            }
-            
-            // Insert data jika tabel sudah ada
-            if (Schema::hasTable('promo_onedecade_entries')) {
-                DB::table('promo_onedecade_entries')->insert([
-                    'undian_code' => $undianCode,
-                    'order_number' => $request->order_number,
-                    'platform' => $request->platform,
-                    'contact_info' => $cleanContact,
-                    'entry_number' => $entryNumber,
-                    'is_verified' => true,
-                    'verified_at' => now(),
-                    'ip_address' => $request->ip(),
-                    'user_agent' => $request->userAgent(),
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
-            
-            // Set success flash
-            session()->flash('verification_status', 'success');
-            session()->flash('success_message', 'Nomor undian terverifikasi. Good luck, peeps!');
-            
-            // Return with AJAX if request is AJAX
-            if ($request->ajax()) {
-                return response()->json([
-                    'status' => 'success',
-                    'message' => 'Nomor undian terverifikasi. Good luck, peeps!'
-                ]);
-            }
-            
-            // Redirect to same page for page refresh
-            return back();
-            
-        } catch (\Exception $e) {
-            Log::error('Error in One Decade promo verification: ' . $e->getMessage(), [
-                'undian_code' => $request->undian_code ?? 'not provided',
-                'order_number' => $request->order_number ?? 'not provided',
-                'platform' => $request->platform ?? 'not provided'
+        // Set error flash
+        session()->flash('verification_status', 'error');
+        session()->flash('error_message', 'Terjadi kesalahan sistem. Silakan coba lagi nanti.');
+        
+        // Return with AJAX if request is AJAX
+        if ($request->ajax()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan sistem. Silakan coba lagi nanti.',
+                'redirect_url' => route('promo.onedecade.finish')
             ]);
-            
-            // Set error flash
-            session()->flash('verification_status', 'error');
-            session()->flash('error_message', 'Kode tidak ditemukan atau sudah dipakai. Cek kembali ya.');
-            
-            // Return with AJAX if request is AJAX
-            if ($request->ajax()) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Kode tidak ditemukan atau sudah dipakai. Cek kembali ya.'
-                ]);
-            }
-            
-            return back()->withInput();
         }
+        
+        // Redirect to finish page
+        return redirect()->route('promo.onedecade.finish');
     }
+}
+
+
+
     
     /**
      * Validasi nomor undian dengan data di spreadsheet
