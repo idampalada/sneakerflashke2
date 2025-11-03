@@ -203,7 +203,7 @@
     
     <!-- Footer Simple -->
     <div class="footer">
-        <p>© {{ date('Y') }} SneakerFlash. All rights reserved.</p>
+        <p>© {{ date('Y') }} Sneakers Flash. All rights reserved.</p>
     </div>
 </body>
 </html>

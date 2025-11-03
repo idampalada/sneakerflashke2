@@ -1172,6 +1172,7 @@ console.log('✅ Enhanced product page loaded with authentication checks for Add
         @apply left-4 right-4 max-w-none;
     }
 }
+
 </style>
 
 <!-- Alternative: Simple Toast without animations -->
@@ -1194,6 +1195,7 @@ console.log('✅ Enhanced product page loaded with authentication checks for Add
 </div>
 
 <script>
+// Simple toast functions if the main JavaScript isn't loaded
 // Simple toast functions if the main JavaScript isn't loaded
 if (typeof showToast === 'undefined') {
     function showSimpleToast(message, type = 'success') {
@@ -1249,4 +1251,49 @@ if (typeof showToast === 'undefined') {
     window.showToast = showSimpleToast;
     window.hideToast = hideSimpleToast;
 }
+
+// Definisikan fungsi selectSize
+window.selectSize = function(element) {
+    var size = element.getAttribute('data-size');
+    var stock = element.getAttribute('data-stock');
+    var productId = element.getAttribute('data-product-id');
+    var price = element.getAttribute('data-price') || '0';
+    
+    // Perbarui URL dengan ukuran yang dipilih (tanpa titik)
+    var currentUrl = window.location.href;
+    var urlParts = currentUrl.split('-');
+    var lastPart = urlParts[urlParts.length - 1];
+    
+    // Cek apakah bagian terakhir URL adalah angka atau angka dengan titik
+    if (!isNaN(lastPart) || lastPart.match(/^\d+\.\d+$/)) {
+        // Ganti ukuran di URL - hapus titik
+        var cleanSize = size.toString().replace('.', '');
+        urlParts[urlParts.length - 1] = cleanSize;
+        var newUrl = urlParts.join('-');
+        
+        // Refresh halaman dengan URL baru
+        window.location.href = newUrl;
+    }
+};
+
+// Tambahkan fungsi untuk copy URL yang benar
+window.copyProductLink = function(button) {
+    // Ambil input di sebelahnya
+    var input = button.previousElementSibling;
+    if (!input) return;
+    
+    // Salin teks ke clipboard
+    input.select();
+    document.execCommand('copy');
+    
+    // Tampilkan animasi copy berhasil
+    button.classList.add('copied');
+    button.innerHTML = '<i class="fas fa-check"></i> Copied!';
+    
+    // Reset setelah 2 detik
+    setTimeout(function() {
+        button.classList.remove('copied');
+        button.innerHTML = 'Copy URL';
+    }, 2000);
+};
 </script>

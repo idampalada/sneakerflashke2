@@ -635,7 +635,7 @@ Be ready, peeps.</p>
     
     <!-- Footer Simple -->
     <div class="footer">
-        <p>© {{ date('Y') }} SneakerFlash. All rights reserved.</p>
+        <p>© {{ date('Y') }} Sneakers Flash. All rights reserved.</p>
     </div>
     
     <!-- JavaScript -->
@@ -695,5 +695,292 @@ Be ready, peeps.</p>
             @endif
         });
     </script>
+    <!-- SneakerFlash One Decade Promo - Countdown Component -->
+<style>
+/* SneakerFlash One Decade Promo - Countdown Styles */
+.countdown-section {
+    width: 100%;
+    padding: 20px 0 40px;
+    background-color: #03245b;
+    color: white;
+    position: relative;
+}
+
+/* Background image overlay - using the same bgcampaignsf2.png as other sections */
+.countdown-section::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url('/images/bgcampaignsf2.png');
+    background-size: cover;
+    background-position: center;
+    z-index: 1;
+}
+
+/* Ensure content appears above background */
+.countdown-section > * {
+    position: relative;
+    z-index: 2;
+}
+
+.countdown-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.countdown-header h1 {
+    color: white;
+    font-size: 40px;
+    font-weight: bold;
+    margin: 0 0 20px;
+}
+
+.countdown-display {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    max-width: 800px;
+    margin: 0 auto;
+    flex-wrap: wrap;
+}
+
+.countdown-unit {
+    text-align: center;
+    width: 170px;
+}
+
+.countdown-box {
+    background-color: white;
+    color: black;
+    border-radius: 10px;
+    font-size: 120px;
+    font-weight: 900;
+    line-height: 1;
+    width: 170px;
+    height: 170px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.countdown-label {
+    color: white;
+    font-size: 24px;
+    text-transform: capitalize;
+}
+
+.countdown-date {
+    color: white;
+    font-size: 32px;
+    font-weight: bold;
+    text-align: center;
+    margin: 30px 0 0;
+}
+
+/* Responsive styles for mobile devices */
+@media (max-width: 768px) {
+    .countdown-header h1 {
+        font-size: 28px;
+    }
+    
+    .countdown-unit {
+        width: 100px;
+    }
+    
+    .countdown-box {
+        width: 100px;
+        height: 100px;
+        font-size: 60px;
+    }
+    
+    .countdown-label {
+        font-size: 16px;
+    }
+    
+    .countdown-date {
+        font-size: 24px;
+    }
+}
+
+/* Extra small devices */
+@media (max-width: 480px) {
+    .countdown-display {
+        gap: 8px;
+    }
+    
+    .countdown-unit {
+        width: 80px;
+    }
+    
+    .countdown-box {
+        width: 80px;
+        height: 80px;
+        font-size: 50px;
+    }
+    
+    .countdown-label {
+        font-size: 14px;
+    }
+    
+    .countdown-date {
+        font-size: 20px;
+    }
+}
+</style>
+
+<script>
+// Countdown timer for SneakerFlash One Decade Promo
+document.addEventListener('DOMContentLoaded', function() {
+    // Create the countdown element
+    function createCountdownElement() {
+        // Create the main container
+        const countdownSection = document.createElement('section');
+        countdownSection.className = 'promo-section countdown-section';
+        
+        // Create the header
+        const countdownHeader = document.createElement('div');
+        countdownHeader.className = 'countdown-header';
+        
+        const headerText = document.createElement('h1');
+        headerText.textContent = 'Hitung Mundur Pengundian';
+        
+        countdownHeader.appendChild(headerText);
+        
+        // Create the countdown display container
+        const countdownDisplay = document.createElement('div');
+        countdownDisplay.className = 'countdown-display';
+        
+        // Create time units
+        const units = ['hari', 'jam', 'menit', 'detik'];
+        const unitElements = {};
+        
+        units.forEach(unit => {
+            // Create unit container
+            const unitContainer = document.createElement('div');
+            unitContainer.className = 'countdown-unit';
+            
+            // Create the box for the number
+            const numberBox = document.createElement('div');
+            numberBox.className = `countdown-box countdown-${unit}`;
+            
+            // Create the label
+            const label = document.createElement('div');
+            label.className = 'countdown-label';
+            label.textContent = unit.charAt(0).toUpperCase() + unit.slice(1);
+            
+            unitContainer.appendChild(numberBox);
+            unitContainer.appendChild(label);
+            countdownDisplay.appendChild(unitContainer);
+            
+            // Store reference to number element
+            unitElements[unit] = numberBox;
+        });
+        
+        // Create the date text
+        const dateText = document.createElement('div');
+        dateText.className = 'countdown-date';
+        dateText.textContent = '24 Januari 2026';
+        
+        // Add all elements to the countdown section
+        countdownSection.appendChild(countdownHeader);
+        countdownSection.appendChild(countdownDisplay);
+        countdownSection.appendChild(dateText);
+        
+        return {
+            section: countdownSection,
+            elements: unitElements
+        };
+    }
+    
+    // Calculate time left until target date
+    function calculateTimeLeft() {
+        // Target date: January 24, 2026 at 12:00 WIB (UTC+7)
+        const targetDate = new Date('2026-01-24T12:00:00+07:00');
+        const now = new Date();
+        const difference = targetDate - now;
+        
+        if (difference <= 0) {
+            return {
+                days: 0,
+                hours: 0,
+                minutes: 0,
+                seconds: 0
+            };
+        }
+        
+        return {
+            days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+            hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+            minutes: Math.floor((difference / 1000 / 60) % 60),
+            seconds: Math.floor((difference / 1000) % 60)
+        };
+    }
+    
+    // Format number with leading zero if needed
+    function formatNumber(num) {
+        return num < 10 ? `0${num}` : num;
+    }
+    
+    // Update countdown
+    function updateCountdown(elements) {
+        const timeLeft = calculateTimeLeft();
+        
+        elements.hari.textContent = formatNumber(timeLeft.days);
+        elements.jam.textContent = formatNumber(timeLeft.hours);
+        elements.menit.textContent = formatNumber(timeLeft.minutes);
+        elements.detik.textContent = formatNumber(timeLeft.seconds);
+    }
+    
+    // Initialize countdown
+    function initCountdown() {
+        // Create countdown element
+        const countdown = createCountdownElement();
+        
+        // Create footer copyright text
+        const footerText = document.createElement('div');
+        footerText.style.textAlign = 'center';
+        footerText.style.padding = '20px 0';
+        footerText.style.color = 'rgba(255, 255, 255, 0.7)';
+        footerText.style.fontSize = '14px';
+        footerText.style.position = 'relative';
+        footerText.style.zIndex = '2';
+        footerText.innerHTML = `© ${new Date().getFullYear()} Sneakers Flash. All rights reserved.`;
+        
+        // Create a container for the countdown and footer
+        const container = document.createElement('div');
+        container.style.position = 'relative';
+        
+        // Add countdown and footer to container
+        container.appendChild(countdown.section);
+        container.appendChild(footerText);
+        
+        // Find the footer to insert the countdown before it
+        const footer = document.querySelector('.footer');
+        if (footer) {
+            // Replace existing footer with our content
+            footer.parentNode.replaceChild(container, footer);
+        } else {
+            // If footer doesn't exist, append to body
+            document.body.appendChild(container);
+        }
+        
+        // Set initial values
+        updateCountdown(countdown.elements);
+        
+        // Update countdown every second
+        setInterval(function() {
+            updateCountdown(countdown.elements);
+        }, 1000);
+    }
+    
+    // Initialize the countdown
+    initCountdown();
+});
+</script>
 </body>
 </html>
