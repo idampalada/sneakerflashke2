@@ -145,11 +145,11 @@
                 
 
                 <!-- SKU Information -->
-                @if($product->sku)
-                    <div class="text-sm text-gray-500 mb-4">
-                        <p><strong>SKU:</strong> {{ $product->sku }}</p>
-                    </div>
-                @endif
+@if($product->sku_parent)
+    <div class="text-sm text-gray-500 mb-4">
+        <p><strong>SKU:</strong> {{ $product->sku_parent }}</p>
+    </div>
+@endif
             </div>
 
             <!-- Price -->

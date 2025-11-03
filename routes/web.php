@@ -535,6 +535,9 @@ Route::prefix('promo')->name('promo.')->group(function () {
     // Route baru untuk halaman verifikasi
     Route::get('/onedecade/verification', [App\Http\Controllers\Frontend\PromoController::class, 'showOneDecadeVerification'])->name('onedecade.verification');
 
+        Route::get('/onedecade/dataverif', [App\Http\Controllers\Frontend\DataVerifController::class, 'index'])->name('onedecade.dataverif');
+    
+
     // TAMBAHKAN: Route untuk testing spreadsheet connection
     Route::get('/onedecade/test-spreadsheet', [App\Http\Controllers\Frontend\PromoController::class, 'testSpreadsheetConnection'])->name('onedecade.test-spreadsheet');
     Route::get('/onedecade/view-csv', [App\Http\Controllers\Frontend\PromoController::class, 'viewSpreadsheetCsv'])->name('onedecade.view-csv');
