@@ -149,85 +149,137 @@ class ProductController extends Controller
 
     // ⭐ NEW: Product Detail Show Method
     public function show($slug)
-    {
-        try {
-            // Find product by slug
+{
+    try {
+        // Check if slug has -size-XX format
+        if (preg_match('/(.*)-size-(\d+(?:\.\d+)?)$/', $slug, $matches)) {
+            $baseSlug = $matches[1];
+            $requestedSize = $matches[2];
+            
+            // Try to find product directly by slug
             $product = Product::where('slug', $slug)
                 ->where('is_active', true)
                 ->whereNotNull('published_at')
                 ->where('published_at', '<=', now())
                 ->with('category')
                 ->first();
-
+            
+            // If not found, check for product without size in slug
             if (!$product) {
-                abort(404, 'Product not found');
-            }
-
-            // ⭐ ENHANCED: Get size variants for the same product
-            $sizeVariants = collect();
-            if (!empty($product->sku_parent)) {
-                $sizeVariants = Product::where('sku_parent', $product->sku_parent)
+                // First, try to find the product by base slug
+                $product = Product::where('slug', $baseSlug)
                     ->where('is_active', true)
                     ->whereNotNull('published_at')
                     ->where('published_at', '<=', now())
-                    ->where('id', '!=', $product->id)
-                    ->get()
-                    ->map(function ($variant) {
-                        // Extract size from SKU or available_sizes
-                        $size = null;
-                        if (is_array($variant->available_sizes) && !empty($variant->available_sizes)) {
-                            $size = $variant->available_sizes[0];
-                        } elseif (is_string($variant->available_sizes)) {
-                            $size = $variant->available_sizes;
+                    ->with('category')
+                    ->first();
+                
+                // If the base product is found, check if it has the requested size
+                if ($product) {
+                    $availableSizes = $product->available_sizes;
+                    if (!is_array($availableSizes)) {
+                        if (is_string($availableSizes)) {
+                            $availableSizes = [$availableSizes];
                         } else {
-                            // Extract from SKU pattern
-                            $size = $this->extractSizeFromSku($variant->sku, $variant->sku_parent);
+                            $availableSizes = [];
                         }
+                    }
+                    
+                    // If product doesn't have the requested size, try to find a variant
+                    if (!in_array($requestedSize, $availableSizes)) {
+                        // Look for another product with the same SKU parent that has this size
+                        $variant = Product::where('sku_parent', $product->sku_parent)
+                            ->where('is_active', true)
+                            ->whereNotNull('published_at')
+                            ->where('published_at', '<=', now())
+                            ->whereRaw("CAST(available_sizes->>0 as TEXT) = ?", [$requestedSize])
+                            ->first();
                         
-                        return [
-                            'id' => $variant->id,
-                            'size' => $size ?: 'One Size',
-                            'stock' => $variant->stock_quantity ?? 0,
-                            'sku' => $variant->sku,
-                            'price' => $variant->sale_price ?: $variant->price,
-                            'original_price' => $variant->price,
-                            'available' => ($variant->stock_quantity ?? 0) > 0,
-                            'slug' => $variant->slug
-                        ];
-                    });
+                        if ($variant) {
+                            $product = $variant;
+                        }
+                    }
+                }
             }
+        } else {
+            // Regular slug, find product normally
+            $product = Product::where('slug', $slug)
+                ->where('is_active', true)
+                ->whereNotNull('published_at')
+                ->where('published_at', '<=', now())
+                ->with('category')
+                ->first();
+        }
 
-            // Get related products (same category or brand)
-            $relatedProducts = Product::where('is_active', true)
+        if (!$product) {
+            abort(404, 'Product not found');
+        }
+
+        // ⭐ ENHANCED: Get size variants for the same product
+        $sizeVariants = collect();
+        if (!empty($product->sku_parent)) {
+            $sizeVariants = Product::where('sku_parent', $product->sku_parent)
+                ->where('is_active', true)
                 ->whereNotNull('published_at')
                 ->where('published_at', '<=', now())
                 ->where('id', '!=', $product->id)
-                ->where(function ($query) use ($product) {
-                    if ($product->category_id) {
-                        $query->where('category_id', $product->category_id);
+                ->get()
+                ->map(function ($variant) {
+                    // Extract size from SKU or available_sizes
+                    $size = null;
+                    if (is_array($variant->available_sizes) && !empty($variant->available_sizes)) {
+                        $size = $variant->available_sizes[0];
+                    } elseif (is_string($variant->available_sizes)) {
+                        $size = $variant->available_sizes;
+                    } else {
+                        // Extract from SKU pattern
+                        $size = $this->extractSizeFromSku($variant->sku, $variant->sku_parent);
                     }
-                    if ($product->brand) {
-                        $query->orWhere('brand', $product->brand);
-                    }
-                })
-                ->inRandomOrder()
-                ->limit(12)
-                ->get();
-
-            // ⭐ SAFE: Ensure arrays are properly formatted
-            $product = $this->formatProductArrays($product);
-
-            return view('frontend.products.show', compact('product', 'sizeVariants', 'relatedProducts'));
-
-        } catch (\Exception $e) {
-            Log::error('Product show error: ' . $e->getMessage(), [
-                'slug' => $slug,
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            abort(404, 'Product not found');
+                    
+                    return [
+                        'id' => $variant->id,
+                        'size' => $size ?: 'One Size',
+                        'stock' => $variant->stock_quantity ?? 0,
+                        'sku' => $variant->sku,
+                        'price' => $variant->sale_price ?: $variant->price,
+                        'original_price' => $variant->price,
+                        'available' => ($variant->stock_quantity ?? 0) > 0,
+                        'slug' => $variant->slug
+                    ];
+                });
         }
+
+        // Get related products
+        $relatedProducts = Product::where('is_active', true)
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now())
+            ->where('id', '!=', $product->id)
+            ->where(function ($query) use ($product) {
+                if ($product->category_id) {
+                    $query->where('category_id', $product->category_id);
+                }
+                if ($product->brand) {
+                    $query->orWhere('brand', $product->brand);
+                }
+            })
+            ->inRandomOrder()
+            ->limit(12)
+            ->get();
+
+        // Format arrays
+        $product = $this->formatProductArrays($product);
+
+        return view('frontend.products.show', compact('product', 'sizeVariants', 'relatedProducts'));
+
+    } catch (\Exception $e) {
+        Log::error('Product show error: ' . $e->getMessage(), [
+            'slug' => $slug,
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        abort(404, 'Product not found');
     }
+}
 
     /**
      * ⭐ CORRECTED: Group products by sku_parent (same product), variants by SKU
