@@ -1,0 +1,56 @@
+/* 
+* Fix untuk Social Media Icons di Footer - Versi Compact
+* File: social-media-fix-compact.css
+* Deskripsi: Memperbaiki posisi social media icons agar lebih compact dan tidak terlalu jauh dari konten lain
+*/
+
+/* Mengurangi margin top dan padding top pada social media container */
+.border-t.border-gray-700.mt-8.pt-8.text-center {
+    margin-top: 15px !important; /* Kurangi sedikit dari 20px menjadi 15px */
+    padding-top: 15px !important; /* Kurangi sedikit dari 20px menjadi 15px */
+    margin-bottom: 70px; /* Tetap beri ruang untuk bottom navigation */
+}
+
+/* Media query untuk mobile devices */
+@media (max-width: 767px) {
+    /* Kurangi jarak dari content sebelumnya */
+    .border-t.border-gray-700.mt-8.pt-8.text-center {
+        margin-top: 10px !important; /* Kurangi sedikit dari 15px menjadi 10px */
+        padding-top: 10px !important; /* Kurangi sedikit dari 15px menjadi 10px */
+        margin-bottom: 75px; /* Sedikit kurangi dari 80px */
+    }
+    
+    /* Kurangi padding-bottom pada container social media icons */
+    footer .flex.justify-center.space-x-6 {
+        padding-bottom: 5px; /* Kurangi dari 10px menjadi 5px */
+    }
+    
+    /* Buat ikon social media lebih compact */
+    footer .flex.justify-center.space-x-6 {
+        gap: 15px; /* Kurangi dari 20px menjadi 15px */
+    }
+    
+    /* Optional: Tambahkan margin bottom pada footer content sebelum social media */
+    footer .grid {
+        margin-bottom: 0 !important; /* Tetap sama */
+    }
+    
+    /* Hapus margin/padding yang tidak perlu di footer */
+    footer > div:not(:last-child) {
+        margin-bottom: 10px !important; /* Kurangi dari 15px menjadi 10px */
+    }
+}
+
+/* Aturan penting untuk memperbaiki spasi */
+@media (max-width: 480px) {
+    /* Hapus padding yang tidak perlu di bawah About Us/Delivery dll */
+    footer .grid .pl-4,
+    footer .grid .pr-4 {
+        padding-bottom: 0 !important; /* Tetap sama */
+    }
+    
+    /* Kurangi margin pada item footer terakhir */
+    footer .grid > div:last-child {
+        margin-bottom: 5px !important; /* Tetap sama */
+    }
+}
