@@ -180,10 +180,15 @@ private function validateUndianWithSpreadsheet($undianCode, $orderNumber, $platf
         @$dom->loadHTML($spreadsheetData);
         $rows = $dom->getElementsByTagName('tr');
         
-        // Cari indeks kolom yang relevan
-        $noPesananIndex = 4; // Kolom E, lihat gambar
-        $nomorUndianIndex = 7; // Kolom H (JUMLAH KUPON)
-        $platformIndex = 2;   // Kolom C, untuk Market Place
+        // Cari indeks kolom yang relevan - PERBAIKAN:
+        $noPesananIndex = 4;     // Kolom E, No Pesanan
+        $platformIndex = 2;      // Kolom C, Market Place
+        
+        // Kolom NOMOR UNDIAN berada di kolom I, J, K, dan L (indeks 8, 9, 10, dan 11)
+        $nomorUndianIndex1 = 8;  // Kolom I, NOMOR UNDIAN pertama
+        $nomorUndianIndex2 = 9;  // Kolom J, NOMOR UNDIAN kedua (jika ada)
+        $nomorUndianIndex3 = 10; // Kolom K, NOMOR UNDIAN ketiga (jika ada)
+        $nomorUndianIndex4 = 11; // Kolom L, NOMOR UNDIAN keempat (jika ada)
         
         // Cek setiap baris data
         $nomorUndianDitemukan = false;
@@ -195,92 +200,109 @@ private function validateUndianWithSpreadsheet($undianCode, $orderNumber, $platf
             $cells = $row->getElementsByTagName('td');
             
             // Skip jika tidak cukup kolom
-            if ($cells->length <= max($noPesananIndex, $nomorUndianIndex, $platformIndex)) continue;
+            if ($cells->length <= max($noPesananIndex, $nomorUndianIndex1, $platformIndex)) continue;
             
             $dataNoPesanan = trim(strip_tags($cells->item($noPesananIndex)->textContent));
-            $dataNomorUndian = trim(strip_tags($cells->item($nomorUndianIndex)->textContent));
             $dataPlatform = trim(strip_tags($cells->item($platformIndex)->textContent));
             
-            // Jika nomor undian cocok
-            if (strtoupper($dataNomorUndian) === strtoupper($undianCode)) {
-                $nomorUndianDitemukan = true;
+            // Periksa semua kolom NOMOR UNDIAN (1-4)
+            $undianColumns = [
+                $nomorUndianIndex1 => 'NOMOR UNDIAN 1',
+                $nomorUndianIndex2 => 'NOMOR UNDIAN 2',
+                $nomorUndianIndex3 => 'NOMOR UNDIAN 3',
+                $nomorUndianIndex4 => 'NOMOR UNDIAN 4'
+            ];
+            
+            foreach ($undianColumns as $columnIndex => $columnName) {
+                // Pastikan kolom ada
+                if ($cells->length <= $columnIndex) continue;
                 
-                // Cek apakah nomor pesanan cocok
-                if (strtoupper($dataNoPesanan) === strtoupper($orderNumber)) {
-                    // Normalisasi platform untuk pengecekan
-                    $platformMatch = false;
+                $dataNomorUndian = trim(strip_tags($cells->item($columnIndex)->textContent));
+                
+                // Jika nomor undian tidak kosong dan cocok
+                if (!empty($dataNomorUndian) && strtoupper($dataNomorUndian) === strtoupper($undianCode)) {
+                    $nomorUndianDitemukan = true;
                     
-                    // Normalisasi platform (case-insensitive)
-                    $dataPlatformUpper = strtoupper($dataPlatform);
-                    $inputPlatformUpper = strtoupper($platform);
-                    
-                    // Cek kecocokan langsung
-                    if ($dataPlatformUpper === $inputPlatformUpper) {
-                        $platformMatch = true;
-                    } 
-                    // Cek mapping platform spesifik
-                    else {
-                        // Tokopedia ⟷ TOKPED
-                        if (($dataPlatformUpper === 'TOKPED' && $inputPlatformUpper === 'TOKOPEDIA') ||
-                            ($dataPlatformUpper === 'TOKOPEDIA' && $inputPlatformUpper === 'TOKPED')) {
+                    // Cek apakah nomor pesanan cocok
+                    if (strtoupper($dataNoPesanan) === strtoupper($orderNumber)) {
+                        // Normalisasi platform untuk pengecekan
+                        $platformMatch = false;
+                        
+                        // Normalisasi platform (case-insensitive)
+                        $dataPlatformUpper = strtoupper($dataPlatform);
+                        $inputPlatformUpper = strtoupper($platform);
+                        
+                        // Cek kecocokan langsung
+                        if ($dataPlatformUpper === $inputPlatformUpper) {
                             $platformMatch = true;
+                        } 
+                        // Cek mapping platform spesifik
+                        else {
+                            // Tokopedia ⟷ TOKPED
+                            if (($dataPlatformUpper === 'TOKPED' && $inputPlatformUpper === 'TOKOPEDIA') ||
+                                ($dataPlatformUpper === 'TOKOPEDIA' && $inputPlatformUpper === 'TOKPED')) {
+                                $platformMatch = true;
+                            }
+                            // Website / Website Sneakers Flash ⟷ WEB
+                            else if (($dataPlatformUpper === 'WEB' && ($inputPlatformUpper === 'WEBSITE' || $inputPlatformUpper === 'WEBSITE SNEAKERS FLASH')) ||
+                                    (($inputPlatformUpper === 'WEB' && ($dataPlatformUpper === 'WEBSITE' || $dataPlatformUpper === 'WEBSITE SNEAKERS FLASH')))) {
+                                $platformMatch = true;
+                            }
+                            // WhatsApp ⟷ WA DLL
+                            else if (($dataPlatformUpper === 'WA DLL' && $inputPlatformUpper === 'WHATSAPP') ||
+                                    ($dataPlatformUpper === 'WHATSAPP' && $inputPlatformUpper === 'WA DLL')) {
+                                $platformMatch = true;
+                            }
+                            // USS Event ⟷ USS
+                            else if (($dataPlatformUpper === 'USS' && $inputPlatformUpper === 'USS EVENT') ||
+                                    ($dataPlatformUpper === 'USS EVENT' && $inputPlatformUpper === 'USS')) {
+                                $platformMatch = true;
+                            }
+                            // BliBli ⟷ BLIBI
+                            else if (($dataPlatformUpper === 'BLIBI' && $inputPlatformUpper === 'BLIBLI') ||
+                                    ($dataPlatformUpper === 'BLIBLI' && $inputPlatformUpper === 'BLIBI')) {
+                                $platformMatch = true;
+                            }
                         }
-                        // Website / Website Sneakers Flash ⟷ WEB
-                        else if (($dataPlatformUpper === 'WEB' && ($inputPlatformUpper === 'WEBSITE' || $inputPlatformUpper === 'WEBSITE SNEAKERS FLASH')) ||
-                                (($inputPlatformUpper === 'WEB' && ($dataPlatformUpper === 'WEBSITE' || $dataPlatformUpper === 'WEBSITE SNEAKERS FLASH')))) {
-                            $platformMatch = true;
-                        }
-                        // WhatsApp ⟷ WA DLL
-                        else if (($dataPlatformUpper === 'WA DLL' && $inputPlatformUpper === 'WHATSAPP') ||
-                                ($dataPlatformUpper === 'WHATSAPP' && $inputPlatformUpper === 'WA DLL')) {
-                            $platformMatch = true;
-                        }
-                        // USS Event ⟷ USS
-                        else if (($dataPlatformUpper === 'USS' && $inputPlatformUpper === 'USS EVENT') ||
-                                ($dataPlatformUpper === 'USS EVENT' && $inputPlatformUpper === 'USS')) {
-                            $platformMatch = true;
-                        }
-                        // BliBli ⟷ BLIBI
-                        else if (($dataPlatformUpper === 'BLIBI' && $inputPlatformUpper === 'BLIBLI') ||
-                                ($dataPlatformUpper === 'BLIBLI' && $inputPlatformUpper === 'BLIBI')) {
-                            $platformMatch = true;
+                        
+                        // Cek hasil normalisasi platform
+                        if ($platformMatch) {
+                            // Semua data cocok - sukses!
+                            return [
+                                'success' => true,
+                                'message' => 'Data valid',
+                                'data' => [
+                                    'NOMOR UNDIAN' => $dataNomorUndian,
+                                    'No Pesanan' => $dataNoPesanan,
+                                    'Market Place' => $dataPlatform,
+                                    'Kolom' => $columnName
+                                ]
+                            ];
+                        } else {
+                            // Platform tidak cocok
+                            return [
+                                'success' => false,
+                                'message' => 'Platform pembelian tidak sesuai dengan data. Silakan periksa kembali.',
+                            ];
                         }
                     }
-                    
-                    // Cek hasil normalisasi platform
-                    if ($platformMatch) {
-                        // Semua data cocok - sukses!
-                        return [
-                            'success' => true,
-                            'message' => 'Data valid',
-                            'data' => [
-                                'NOMOR UNDIAN' => $dataNomorUndian,
-                                'No Pesanan' => $dataNoPesanan,
-                                'Market Place' => $dataPlatform
-                            ]
-                        ];
-                    } else {
-                        // Platform tidak cocok
-                        return [
-                            'success' => false,
-                            'message' => 'Platform pembelian tidak sesuai dengan data. Silakan periksa kembali.',
-                        ];
-                    }
-                } else {
-                    // Nomor undian cocok tapi nomor pesanan tidak cocok
-                    return [
-                        'success' => false,
-                        'message' => 'Nomor pesanan tidak sesuai dengan nomor undian. Silakan periksa kembali.',
-                    ];
                 }
             }
         }
         
-        // Nomor undian tidak ditemukan sama sekali
-        return [
-            'success' => false,
-            'message' => 'Kode tidak ditemukan. Silakan periksa kembali.',
-        ];
+        if ($nomorUndianDitemukan) {
+            // Nomor undian ditemukan tetapi nomor pesanan tidak cocok
+            return [
+                'success' => false,
+                'message' => 'Nomor pesanan tidak sesuai dengan nomor undian. Silakan periksa kembali.',
+            ];
+        } else {
+            // Nomor undian tidak ditemukan sama sekali
+            return [
+                'success' => false,
+                'message' => 'Kode tidak ditemukan. Silakan periksa kembali.',
+            ];
+        }
         
     } catch (\Exception $e) {
         \Log::error('Error validasi undian: ' . $e->getMessage());
