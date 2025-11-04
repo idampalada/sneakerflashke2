@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Http;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 
+
 class PromoController extends Controller
 {
     protected $spreadsheetId;
@@ -27,41 +28,13 @@ class PromoController extends Controller
     /**
      * Tampilkan halaman promo One Decade
      */
-    public function showOneDecade()
-    {
-        try {
-            // Get stats dari spreadsheet
-            $stats = $this->getPromoStats();
-            
-            // Tetapkan tanggal pengundian
-            $drawDate = Carbon::create(2026, 1, 24, 12, 0, 0);
-            
-            return view('frontend.promo.onedecade', [
-                'participantCount' => $stats['participantCount'],
-                'activeNumbers' => $stats['activeNumbers'],
-                'lastUpdated' => $stats['lastUpdated'],
-                'drawDate' => $drawDate,
-                'igAccount' => '@sneakers_flash'
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Error in One Decade promo page: ' . $e->getMessage());
-            
-            // Fallback to default values
-            return view('frontend.promo.onedecade', [
-                'participantCount' => 16,
-                'activeNumbers' => 25,
-                'lastUpdated' => Carbon::now(),
-                'drawDate' => Carbon::create(2026, 1, 24, 12, 0, 0),
-                'igAccount' => '@sneakers_flash'
-            ]);
-        }
-    }
+
     
     /**
      * Proses verifikasi untuk promo One Decade
      * Update: Validasi nomor undian dengan data di spreadsheet
      */
-    public function verifyOneDecade(Request $request)
+public function verifyOneDecade(Request $request)
 {
     // Validasi input
     $request->validate([
@@ -191,22 +164,91 @@ private function validateUndianWithSpreadsheet($undianCode, $orderNumber, $platf
         'platform' => $platform
     ]);
     
-    // SOLUSI SEMENTARA: Bypass validasi spreadsheet
-    return [
-        'success' => true,
-        'message' => 'Data valid (bypass)',
-        'data' => [
-            'NOMOR UNDIAN' => $undianCode,
-            'No Pesanan' => $orderNumber,
-            'Market Place' => strtoupper($platform)
-        ]
-    ];
-    
-    // Kode asli di bawah ini, sementara dinonaktifkan...
     try {
-        // ... kode asli ...
+        // Ambil data spreadsheet
+        $spreadsheetData = $this->fetchSpreadsheetData();
+        
+        if (empty($spreadsheetData)) {
+            return [
+                'success' => false,
+                'message' => 'Tidak dapat mengakses data validasi. Silakan coba lagi nanti.',
+            ];
+        }
+        
+        // Parse HTML menjadi DOM
+        $dom = new \DOMDocument();
+        @$dom->loadHTML($spreadsheetData);
+        $rows = $dom->getElementsByTagName('tr');
+        
+        // Cari indeks kolom yang relevan
+        $noPesananIndex = 4; // Kolom E, lihat gambar
+        $nomorUndianIndex = 7; // Kolom H (JUMLAH KUPON)
+        $platformIndex = 2;   // Kolom C, untuk Market Place
+        
+        // Cek setiap baris data
+        $nomorUndianDitemukan = false;
+        
+        foreach ($rows as $i => $row) {
+            // Skip header rows
+            if ($i < 4) continue;
+            
+            $cells = $row->getElementsByTagName('td');
+            
+            // Skip jika tidak cukup kolom
+            if ($cells->length <= max($noPesananIndex, $nomorUndianIndex, $platformIndex)) continue;
+            
+            $dataNoPesanan = trim(strip_tags($cells->item($noPesananIndex)->textContent));
+            $dataNomorUndian = trim(strip_tags($cells->item($nomorUndianIndex)->textContent));
+            $dataPlatform = trim(strip_tags($cells->item($platformIndex)->textContent));
+            
+            // Jika nomor undian cocok
+            if (strtoupper($dataNomorUndian) === strtoupper($undianCode)) {
+                $nomorUndianDitemukan = true;
+                
+                // Cek apakah nomor pesanan cocok
+                if (strtoupper($dataNoPesanan) === strtoupper($orderNumber)) {
+                    // Cek apakah platform juga cocok
+                    if (strtoupper($dataPlatform) === strtoupper($platform)) {
+                        // Semua data cocok - sukses!
+                        return [
+                            'success' => true,
+                            'message' => 'Data valid',
+                            'data' => [
+                                'NOMOR UNDIAN' => $dataNomorUndian,
+                                'No Pesanan' => $dataNoPesanan,
+                                'Market Place' => $dataPlatform
+                            ]
+                        ];
+                    } else {
+                        // Platform tidak cocok
+                        return [
+                            'success' => false,
+                            'message' => 'Platform pembelian tidak sesuai dengan data. Silakan periksa kembali.',
+                        ];
+                    }
+                } else {
+                    // Nomor undian cocok tapi nomor pesanan tidak cocok
+                    return [
+                        'success' => false,
+                        'message' => 'Nomor pesanan tidak sesuai dengan nomor undian. Silakan periksa kembali.',
+                    ];
+                }
+            }
+        }
+        
+        // Nomor undian tidak ditemukan sama sekali
+        return [
+            'success' => false,
+            'message' => 'Kode tidak ditemukan. Silakan periksa kembali.',
+        ];
+        
     } catch (\Exception $e) {
-        // ... kode asli ...
+        \Log::error('Error validasi undian: ' . $e->getMessage());
+        
+        return [
+            'success' => false,
+            'message' => 'Terjadi kesalahan sistem. Silakan coba lagi nanti.',
+        ];
     }
 }
     
@@ -533,6 +575,42 @@ public function getPromoStats()
         return view('frontend.promo.onedecade_verification', [
             'participantCount' => 16,
             'activeNumbers' => 25,
+            'lastUpdated' => Carbon::now(),
+            'drawDate' => Carbon::create(2026, 1, 24, 12, 0, 0),
+            'igAccount' => '@sneakers_flash'
+        ]);
+    }
+}
+public function showOneDecade()
+{
+    try {
+        // Get stats dari spreadsheet
+        $stats = $this->getPromoStats();
+        
+        // Tambahkan baris ini untuk mendapatkan total verifikasi dari database
+        $totalVerifications = DB::table('promo_onedecade_entries')
+            ->where('is_verified', true)
+            ->count();
+        
+        // Tetapkan tanggal pengundian
+        $drawDate = Carbon::create(2026, 1, 24, 12, 0, 0);
+        
+        return view('frontend.promo.onedecade', [
+            'participantCount' => $stats['participantCount'],
+            'activeNumbers' => $stats['activeNumbers'],
+            'totalVerifications' => $totalVerifications, // Tambahkan ini ke data view
+            'lastUpdated' => $stats['lastUpdated'],
+            'drawDate' => $drawDate,
+            'igAccount' => '@sneakers_flash'
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error in One Decade promo page: ' . $e->getMessage());
+        
+        // Fallback to default values
+        return view('frontend.promo.onedecade', [
+            'participantCount' => 16,
+            'activeNumbers' => 25,
+            'totalVerifications' => 0, // Tambahkan ini juga di bagian fallback
             'lastUpdated' => Carbon::now(),
             'drawDate' => Carbon::create(2026, 1, 24, 12, 0, 0),
             'igAccount' => '@sneakers_flash'

@@ -113,10 +113,20 @@
         </svg>
       </div>
       <h1 class="error-title">Verifikasi Gagal</h1>
-      <p class="result-message">
-        Kode tidak ditemukan atau sudah dipakai. Silakan cek kembali kode undian 
-        dan nomor pesanan Anda, atau hubungi customer service kami untuk bantuan.
-      </p>
+      
+      @if(str_contains(session('error_message'), 'Nomor pesanan tidak sesuai'))
+        <p class="result-message">
+          Nomor pesanan tidak sesuai dengan nomor undian. Silakan periksa kembali data yang Anda masukkan.
+        </p>
+      @elseif(str_contains(session('error_message'), 'sudah dipakai'))
+        <p class="result-message">
+          Kode ini sudah pernah digunakan. Setiap kode undian hanya dapat diverifikasi satu kali.
+        </p>
+      @else
+        <p class="result-message">
+          {{ session('error_message') ?? 'Kode tidak ditemukan atau sudah dipakai. Silakan cek kembali kode undian dan nomor pesanan Anda, atau hubungi customer service kami untuk bantuan.' }}
+        </p>
+      @endif
     @endif
 
     <a href="{{ route('promo.onedecade') }}" class="home-button">Kembali ke Halaman Utama</a>

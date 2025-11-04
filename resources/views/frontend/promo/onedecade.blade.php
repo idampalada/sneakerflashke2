@@ -598,12 +598,11 @@
                 
                 <div class="result-box">
                     <!-- Header dengan Statistik -->
-                    <h1>Total Peserta Undian Saat Ini</h1>
+                    <h1>Total Undian Terverifikasi</h1>
                     
                     <!-- Simplified stats display -->
-                    <div class="participants-number">{{ $participantCount }} Peserta</div>
-                    <div class="active-numbers">{{ $activeNumbers }} Nomor Undian Aktif</div>
-                    
+                    <div class="participants-number">{{ $totalVerifications }} Peserta</div>
+
                     <!-- Tanggal Pengundian -->
                     <div class="result-promo-section">
                         <h2>Pengundian Langsung</h2>
