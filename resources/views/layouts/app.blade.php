@@ -23,6 +23,10 @@
     
     <!-- Alpine.js -->
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Vite Assets (termasuk home.css) -->
+   <link rel="stylesheet" href="{{ asset('css/app.css') }}">
+<link rel="stylesheet" href="{{ asset('css/home.css') }}">
+<script src="{{ asset('js/app.js') }}"></script>
     <script>
   document.addEventListener('alpine:init', () => {
     Alpine.store('ui', {
@@ -31,821 +35,6 @@
   });
 </script>
 
-
-
-    <style>
-    <!-- Custom Styles -->
-    /* Reset and Base Styles */
-* {
-    box-sizing: border-box;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
-
-/* Exact Kick Avenue Colors - Background PUTIH */
-.ka-header {
-    background: #ffffff;
-    border-bottom: 1px solid #e5e5e5;
-}
-
-.ka-logo {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    font-weight: 900;
-    font-size: 24px;
-    letter-spacing: 2px;
-    color: #000000;
-    text-decoration: none;
-    font-style: italic;
-    transform: skew(-10deg);
-    display: inline-block;
-}
-
-/* Logo Image Styles */
-.ka-logo-img {
-    height: 50px;
-    width: auto;
-    object-fit: contain;
-}
-
-/* Search container dengan lebar custom 1500px */
-.ka-search-custom {
-    max-width: 1500px;
-}
-
-.ka-search-container {
-    background: #f8f9fa;
-    border-radius: 20px;
-    border: 1px solid #dee2e6;
-    overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-.ka-search-input {
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
-    background: transparent;
-    padding: 12px 45px 12px 45px;
-    width: 100%;
-    font-size: 14px;
-    color: #495057;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
-
-.ka-search-input:focus {
-    outline: none !important;
-    border: none !important;
-    box-shadow: none !important;
-}
-
-.ka-search-input::placeholder {
-    color: #6c757d;
-    font-weight: 400;
-}
-
-.ka-search-icon {
-    position: absolute;
-    left: 15px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #6c757d;
-    font-size: 14px;
-    pointer-events: none;
-}
-
-.ka-search-btn {
-    position: absolute;
-    right: 15px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    color: #6c757d;
-    font-size: 16px;
-    cursor: pointer;
-    padding: 0;
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.ka-search-btn:hover {
-    color: #495057;
-}
-
-.ka-auth-btn {
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 500;
-    text-decoration: none;
-    transition: all 0.3s ease;
-    display: inline-block;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
-
-.ka-login-btn {
-    color: #666;
-    border: 1px solid #ddd;
-    background: white;
-}
-
-.ka-login-btn:hover {
-    background: #f0f0f0;
-    border-color: #ccc;
-}
-
-.ka-register-btn {
-    background: #333;
-    color: white;
-    border: 1px solid #333;
-}
-
-.ka-register-btn:hover {
-    background: #555;
-}
-
-/* Cart & Wishlist Icon Styles */
-.icon-btn {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: #f8f9fa;
-    border: 1px solid #e5e5e5;
-    color: #666;
-    text-decoration: none;
-    transition: all 0.3s ease;
-    font-size: 16px;
-}
-
-.icon-btn:hover {
-    background: #e9ecef;
-    color: #333;
-    transform: translateY(-1px);
-}
-
-.icon-badge {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    background: #ff4757;
-    color: white;
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    font-size: 11px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 20px;
-    line-height: 1;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
-
-/* User Menu Button */
-.user-menu-btn {
-    display: flex;
-    align-items: center;
-    color: #666;
-    padding: 8px 12px;
-    border-radius: 8px;
-    transition: all 0.3s ease;
-    text-decoration: none;
-    background: #f8f9fa;
-    border: 1px solid #e5e5e5;
-    cursor: pointer;
-    white-space: nowrap;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
-
-.user-menu-btn:hover {
-    background: #e9ecef;
-    color: #333;
-}
-
-/* User dropdown positioning */
-.user-dropdown {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    background: white;
-    border: 1px solid #e5e5e5;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    min-width: 180px;
-    z-index: 1000;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.2s ease;
-    margin-top: 10px;
-    pointer-events: none;
-}
-
-.user-dropdown.show {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-}
-
-/* Navigation dropdown styles */
-.nav-dropdown {
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: white;
-    border: 1px solid #e5e5e5;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    min-width: 200px;
-    z-index: 1000;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.2s ease;
-    margin-top: 10px;
-    pointer-events: none;
-}
-/* Brand Dropdown Grid Layout - 4 Kolom */
-.brand-dropdown-grid {
-    display: flex !important;
-    min-width: 600px !important;
-    max-width: 700px !important;
-    padding: 15px !important;
-}
-
-.brand-column {
-    flex: 1;
-    min-width: 150px;
-    margin-right: 15px;
-}
-
-.brand-column:last-child {
-    margin-right: 0;
-}
-
-.brand-column .dropdown-item {
-    padding: 8px 12px;
-    margin-bottom: 2px;
-    font-size: 13px;
-    border-bottom: none;
-}
-
-.brand-column .dropdown-item:hover {
-    background: #f8f9fa;
-    border-radius: 4px;
-}
-
-/* Responsive untuk tablet */
-@media (max-width: 768px) {
-    .brand-dropdown-grid {
-        flex-wrap: wrap;
-        min-width: 400px !important;
-    }
-    
-    .brand-column {
-        flex: 0 0 50%; /* 2 kolom di tablet */
-        margin-bottom: 10px;
-    }
-}
-
-/* Mobile tetap 1 kolom */
-@media (max-width: 480px) {
-    .brand-dropdown-grid {
-        flex-direction: column;
-        min-width: 200px !important;
-    }
-    
-    .brand-column {
-        flex: none;
-        width: 100%;
-        margin-right: 0;
-        margin-bottom: 0;
-    }
-}
-
-.nav-dropdown.show {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-}
-
-/* Navigation item container */
-.nav-item-container {
-    position: relative;
-    display: inline-block;
-}
-
-/* Main navigation button styling */
-.nav-main-btn {
-    color: #000000;  /* GANTI DARI #666666 ke #000000 (HITAM) */
-    padding: 8px 20px;
-    text-decoration: none;
-    font-weight: 700;  /* TETAP BOLD */
-    font-size: 16px;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    text-align: center;
-    position: relative;
-    cursor: pointer;
-    z-index: 1001;
-    background: none;
-    border: none;
-}
-
-.nav-main-btn:hover {
-    background-color: rgba(0,0,0,0.05);
-    color: #000000;  /* GANTI DARI #333 ke #000000 (HITAM SAAT HOVER) */
-}
-
-.nav-main-btn.special {
-    color: #ff4757 !important;
-    font-weight: 700;
-}
-
-.nav-main-btn.special:hover {
-    color: #ff6b7d !important;
-}
-
-/* Dropdown arrow */
-.nav-main-btn .dropdown-arrow {
-    margin-left: 5px;
-    font-size: 12px;
-    transition: transform 0.2s ease;
-}
-
-.nav-main-btn.active .dropdown-arrow {
-    transform: rotate(180deg);
-}
-
-/* Simple link styling for items without dropdowns */
-.nav-simple-link {
-    color: #000000;  /* GANTI DARI #666666 ke #000000 (HITAM) */
-    padding: 8px 20px;
-    text-decoration: none;
-    font-weight: 700;  /* TETAP BOLD */
-    font-size: 16px;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    transition: all 0.3s ease;
-    display: block;
-    text-align: center;
-    position: relative;
-    cursor: pointer;
-    z-index: 1001;
-}
-
-.nav-simple-link:hover {
-    background-color: rgba(0,0,0,0.05);
-    color: #000000;  /* GANTI DARI #333 ke #000000 (HITAM SAAT HOVER) */
-}
-
-.nav-simple-link.special {
-    color: #ff4757 !important;
-    font-weight: 700;
-}
-
-.nav-simple-link.special:hover {
-    color: #ff6b7d !important;
-}
-
-.dropdown-item {
-    display: block;
-    padding: 12px 20px;
-    color: #666;
-    text-decoration: none;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    font-size: 14px;
-    font-weight: 500;
-    border-bottom: 1px solid #f0f0f0;
-    transition: all 0.3s ease;
-    width: 100%;
-    text-align: left;
-    background: none;
-    border-left: none;
-    border-right: none;
-    border-top: none;
-}
-
-.dropdown-item:last-child {
-    border-bottom: none;
-}
-
-.dropdown-item:hover {
-    background: #f8f9fa;
-    color: #333;
-}
-
-.dropdown-header {
-    padding: 15px 20px 10px;
-    font-weight: 700;
-    font-size: 14px;
-    color: #333;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    border-bottom: 2px solid #f0f0f0;
-    margin-bottom: 5px;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
-
-.dropdown-header-link {
-    display: block;
-    padding: 15px 20px 10px;
-    font-weight: 700;
-    font-size: 14px;
-    color: #333;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    border-bottom: 2px solid #f0f0f0;
-    margin-bottom: 5px;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    text-decoration: none;
-    transition: all 0.3s ease;
-}
-
-.dropdown-header-link:hover {
-    background: #f8f9fa;
-    color: #000;
-}
-
-/* Image Carousel Styles - Updated with smaller height */
-/* === iBox-like Hero Banner (full-bleed) === */
-/* Full-bleed seperti iBox */
-.carousel-wrapper{
- position:relative;
- left:50%; right:50%;
- margin-left:-50vw; margin-right:-50vw;
- width:100vw;
- margin-bottom:2rem;
-}
-
-/* Tinggi banner (desktop=480) */
-.carousel-container{
- position:relative; width:100%;
- height:480px;                       /* iBox desktop */
- overflow:hidden;
- background:transparent;
- display:flex; align-items:center; justify-content:center;
- padding-bottom:50px;
-}
-
-/* Slide */
-.carousel-slide{ position:absolute; inset:0; opacity:0; transition:opacity .5s; }
-.carousel-slide.active{ opacity:1; }
-
-/* KUNCI: jangan dicrop, penuhi area setinggi 550, center */
-/* KUNCI: gambar memenuhi area dengan baik, tidak gepeng */
-.carousel-slide img{
- display:block;
- width:100%; height:100% !important; /* penting: kalahkan img{height:auto} global */
- object-fit:cover;                   /* UBAH dari contain ke cover */
- object-position:center;
-}
-
-/* panah & dots (boleh tetap) */
-.carousel-nav{
- position:absolute; top:50%; transform:translateY(-50%);
- background:rgba(255,255,255,.9); border:none;
- width:48px; height:48px; border-radius:9999px;
- display:flex; align-items:center; justify-content:center;
- cursor:pointer; font-size:18px; color:#333; z-index:10;
- box-shadow:0 2px 8px rgba(0,0,0,.15);
-}
-.carousel-nav:hover{ background:#fff; transform:translateY(-50%) scale(1.06); }
-.carousel-nav.prev{ left:24px; } .carousel-nav.next{ right:24px; }
-
-.carousel-indicators{
- position:absolute; left:50%; transform:translateX(-50%);
- bottom:15px; display:flex; gap:8px; z-index:10;
-}
-.carousel-dot{
- width:10px; height:10px; border-radius:9999px; border:none;
- background:rgba(255,255,255,.5); transition:all .2s; cursor:pointer;
-}
-.carousel-dot.active{ background:#fff; transform:scale(1.15); }
-
-/* Tablet & Mobile heights */
-@media screen and (min-width:768px) and (max-width:1023px){ 
- .carousel-container{ height:430px !important; } 
-}
-
-@media screen and (max-width:767px){
- .carousel-container{ 
-   height:370px !important; 
-   min-height:370px;
-   padding-bottom:40px;               /* Tambahkan ruang dots mobile */
- }
- .carousel-nav{ width:40px; height:40px; font-size:16px; }
- .carousel-nav.prev{ left:14px; } .carousel-nav.next{ right:14px; }
- .carousel-indicators{ bottom:10px; gap:6px; }
- .carousel-dot{ width:8px; height:8px; }
-}
-.carousel-slide-bg {
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    
-    @media (min-width: 768px) {
-        background-position: center center;
-    }
-    
-    @media (max-width: 767px) {
-        background-position: center top;
-    }
-}
-
-/* Jika menggunakan picture element (recommended) */
-.responsive-banner {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-/* Media queries untuk different aspect ratios */
-@media (max-width: 767px) {
-    .carousel-container {
-        height: 370px !important; /* Mobile height */
-    }
-}
-
-@media (min-width: 768px) and (max-width: 1023px) {
-    .carousel-container {
-        height: 430px !important; /* Tablet height */
-    }
-}
-
-@media (min-width: 1024px) {
-    .carousel-container {
-        height: 480px !important; /* Naikan dari 480px ke 600px */
-    }
-}
-/* Hindari scrollbar horizontal dari full-bleed */
-html, body { 
-    overflow-x: hidden; 
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
-
-/* Mobile Styles */
-.mobile-menu-overlay {
-  position: fixed;
-  top: 0; left: 0; width: 100%; height: 100vh;
-  background: rgba(0,0,0,0.5);
-  z-index: 9998;
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.3s ease;
-  pointer-events: none;         /* ← tambahkan */
-}
-.mobile-menu-overlay.open {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;         /* ← aktif hanya saat open */
-}
-
-
-.mobile-menu {
-    position: fixed;
-    top: 0;
-    left: -100%;
-    width: 300px;
-    height: 100vh;
-    background: white;
-    z-index: 9999;
-    transition: left 0.3s ease;
-    overflow-y: auto;
-    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
-
-.mobile-menu.open {
-    left: 0;
-}
-
-.mobile-menu-header {
-    padding: 20px;
-    border-bottom: 1px solid #eee;
-    text-align: center;
-}
-
-.mobile-menu-item {
-    display: block;
-    padding: 15px 20px;
-    color: #333;
-    text-decoration: none;
-    border-bottom: 1px solid #f0f0f0;
-    font-weight: 500;
-    transition: background 0.3s ease;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
-
-.mobile-menu-item:hover {
-    background: #f8f9fa;
-}
-
-.mobile-menu-item.special {
-    color: #ff4757;
-    font-weight: 600;
-}
-
-.mobile-auth-buttons {
-    padding: 20px;
-    border-top: 1px solid #eee;
-}
-
-.mobile-auth-btn {
-    display: block;
-    width: 100%;
-    padding: 12px;
-    margin-bottom: 10px;
-    text-align: center;
-    border-radius: 6px;
-    text-decoration: none;
-    font-weight: 500;
-    transition: all 0.3s ease;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
-
-.mobile-login-btn {
-    background: white;
-    border: 2px solid #ddd;
-    color: #666;
-}
-
-.mobile-register-btn {
-    background: #333;
-    border: 2px solid #333;
-    color: white;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .carousel-container {
-        height: 180px;
-    }
-    
-    .carousel-nav {
-        width: 40px;
-        height: 40px;
-        font-size: 16px;
-    }
-    
-    .carousel-nav.prev {
-        left: 10px;
-    }
-    
-    .carousel-nav.next {
-        right: 10px;
-    }
-
-    .ka-logo-img {
-        height: 40px;
-    }
-
-    .icon-btn {
-        width: 35px;
-        height: 35px;
-        font-size: 14px;
-    }
-
-    .icon-badge {
-        width: 18px;
-        height: 18px;
-        font-size: 10px;
-        top: -3px;
-        right: -3px;
-    }
-}
-
-/* Loading spinner untuk button */
-.loading {
-    opacity: 0.7;
-    cursor: not-allowed;
-}
-
-.loading::after {
-    content: "";
-    position: absolute;
-    width: 16px;
-    height: 16px;
-    margin: auto;
-    border: 2px solid transparent;
-    border-top-color: currentColor;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* Hilangkan spacing antara search dan banner seperti iBox */
-.md\:hidden.bg-white.border-b {
-    margin-bottom: 0 !important;
-    padding-bottom: 0 !important;
-}
-
-.carousel-wrapper {
-    margin-top: 0 !important;
-}
-
-/* Khusus untuk mobile cart & wishlist section juga */
-.md\:hidden.bg-white.border-b.px-4.py-3:last-of-type {
-    margin-bottom: 0 !important;
-    padding-bottom: 0 !important;
-}
-
-/* Override spacing yang mungkin ada */
-@media (max-width: 767px) {
-    .md\:hidden {
-        margin-bottom: 0 !important;
-    }
-    
-    .carousel-wrapper {
-        margin-top: 0 !important;
-    }
-}
-
-/* Hilangkan spacing dan border pada mobile search */
-.md\:hidden.bg-white.border-b.px-4.py-3 {
-    margin-bottom: 0 !important;
-    padding-bottom: 0 !important;
-    border-bottom: none !important; /* Hilangkan garis border */
-}
-
-/* Hilangkan spacing pada mobile cart & wishlist jika ada */
-.md\:hidden.bg-white.border-b.px-4.py-3:last-of-type {
-    margin-bottom: 0 !important;
-    padding-bottom: 0 !important;
-    border-bottom: none !important;
-}
-
-/* Pastikan carousel langsung menempel */
-.carousel-wrapper {
-    margin-top: 0 !important;
-}
-
-/* Override semua border-b pada mobile sections */
-@media (max-width: 767px) {
-    .md\:hidden.border-b {
-        border-bottom: none !important;
-        margin-bottom: 0 !important;
-        padding-bottom: 0 !important;
-    }
-    
-    .carousel-wrapper {
-        margin-top: 0 !important;
-    }
-}
-
-/* Mobile Bottom Navigation Styles */
-.mobile-bottom-nav {
-    height: 70px;
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-}
-
-.mobile-bottom-nav a {
-    transition: color 0.2s ease;
-    min-width: 60px;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
-
-.mobile-bottom-nav a:hover {
-    color: #2563eb;
-}
-
-/* Add padding to body to prevent content being hidden behind bottom nav */
-@media (max-width: 767px) {
-    body {
-        padding-bottom: 70px;
-    }
-}
-
-/* Active state styling */
-.mobile-bottom-nav a.text-blue-600 i {
-    transform: scale(1.1);
-}
-
-/* Cart badge animation */
-.mobile-bottom-nav .bg-red-500 {
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0.8;
-    }
-}
-    </style>
 
     <script>
         function carousel() {
@@ -885,6 +74,19 @@ html, body {
             window.addEventListener('resize', () => {
                 this.updateImageSources();
             });
+            
+            // Tambahkan listener untuk zoom event
+            window.addEventListener('wheel', (e) => {
+                if (e.ctrlKey) {
+                    // User sedang zoom, pastikan banner tetap konsisten
+                    this.fixImageOnZoom();
+                }
+            });
+            
+            // Tambahkan listener untuk touchscreen pinch zoom
+            window.addEventListener('gesturechange', () => {
+                this.fixImageOnZoom();
+            });
         },
         
         updateImageSources() {
@@ -894,8 +96,38 @@ html, body {
             slideImages.forEach((img, index) => {
                 if (this.slides[index]) {
                     img.src = isMobile ? this.slides[index].mobile : this.slides[index].desktop;
+                    // Tambahkan styling fix untuk mencegah perubahan saat zoom
+                    this.applyFixedImageStyling(img);
                 }
             });
+        },
+        
+        fixImageOnZoom() {
+            // Metode ini akan dipanggil saat user melakukan zoom
+            const slideImages = document.querySelectorAll('.carousel-slide img');
+            slideImages.forEach(img => {
+                this.applyFixedImageStyling(img);
+            });
+            
+            // Pastikan container juga tetap dengan ukuran yang benar
+            const container = document.querySelector('.carousel-container');
+            if (container) {
+                container.style.height = '480px';
+                container.style.transform = 'translateZ(0)';
+                container.style.backfaceVisibility = 'hidden';
+                container.style.willChange = 'transform';
+            }
+        },
+        
+        applyFixedImageStyling(img) {
+            // Terapkan styling yang konsisten ke semua gambar carousel
+            img.style.objectFit = 'contain';
+            img.style.objectPosition = 'center';
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.transform = 'translateZ(0)';
+            img.style.backfaceVisibility = 'hidden';
+            img.style.willChange = 'transform';
         },
         
         nextSlide() {
@@ -1182,93 +414,7 @@ html, body {
     </div>
 </div>
 
-<style>
-/* Mobile Submenu Overlay */
-.mobile-submenu-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: white;
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
-    z-index: 20;
-    overflow-y: auto;
-}
 
-.mobile-submenu-overlay.active {
-    transform: translateX(0);
-}
-
-/* Hide main menu when submenu active */
-.menu-hidden {
-    display: none;
-}
-
-/* Submenu Header */
-.mobile-submenu-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px 20px;
-    border-bottom: 1px solid #f0f0f0;
-    background: white;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-}
-
-.mobile-back-btn {
-    display: flex;
-    align-items: center;
-    font-size: 16px;
-    font-weight: 500;
-    color: #333;
-    background: none;
-    border: none;
-    cursor: pointer;
-}
-
-.mobile-close-btn {
-    background: none;
-    border: none;
-    font-size: 18px;
-    color: #666;
-    cursor: pointer;
-}
-
-/* Submenu Content */
-.mobile-submenu-content {
-    padding: 0;
-}
-
-.mobile-submenu-title {
-    font-size: 28px;
-    font-weight: 700;
-    color: #000;
-    padding: 20px;
-    margin: 0;
-    border-bottom: 1px solid #f0f0f0;
-}
-
-/* Large Items */
-.mobile-submenu-item-large {
-    display: block;
-    padding: 18px 20px;
-    font-size: 18px;
-    font-weight: 400;
-    color: #333;
-    text-decoration: none;
-    border-bottom: 1px solid #f5f5f5;
-    transition: all 0.2s ease;
-}
-
-.mobile-submenu-item-large:hover {
-    background: #f8f9fa;
-    color: #000;
-}
-</style>
 <!-- AKHIR MOBILE MENU -->
 
         <!-- Baris pertama: Mobile Layout Baru + Desktop tetap sama -->
@@ -1887,166 +1033,7 @@ function mobileMenuDropdown() {
     </div>
 </footer>
 
-<!-- Alternative: Jika masih belum pojok banget, pakai ini -->
-<style>
-    @media (max-width: 767px) {
-    .mobile-cart-hidden {
-        display: none !important;
-    }
-    
-    .mobile-search-extended {
-        display: flex !important;
-        align-items: center !important;
-        background: #f8f9fa !important;
-        border: 1px solid #e5e5e5 !important;
-        border-radius: 20px !important;
-        padding: 8px 16px !important;
-        color: #666 !important;
-        font-size: 14px !important;
-        height: 35px !important;
-    }
-    
-    .mobile-search-extended i {
-        margin-right: 6px !important;
-    }
-    
-    .search-text {
-        font-size: 13px !important;
-        font-weight: 500 !important;
-    }
-}
-    @media (max-width: 767px) {
-    .mobile-nav-hidden {
-        display: none !important;
-    }
-}
-/* Opsi ekstrem: Logo benar-benar di pojok kiri tanpa padding */
-.logo-absolute-left {
-    margin-left: -1rem !important;
-    padding-left: 1rem !important;
-}
 
-/* Atau gunakan negative margin */
-.logo-negative-margin {
-    margin-left: -2rem;
-}
-</style>
-    
-<!-- Updated CSS Styles -->
-<style>
-/* Mobile Header Layout Fixes */
-@media (max-width: 767px) {
-.mobile-header-layout {
-    display: flex !important;
-    justify-content: flex-start !important;
-    align-items: center !important;
-    width: 100% !important;
-    gap: 8px !important; /* Kurangi gap dari 12px ke 8px */
-    position: relative;
-    padding: 0 8px !important; /* Kurangi padding kiri-kanan */
-}
-    
-    .mobile-hamburger {
-        flex: 0 0 auto;
-        order: 1;
-    }
-    
-    .mobile-logo-center {
-        flex: 0 0 auto;
-        display: flex;
-        justify-content: flex-start;
-        align-items: center;
-        order: 2;
-        position: static !important; /* Hilangkan absolute positioning */
-        left: auto !important;
-        top: auto !important;
-        transform: none !important;
-    }
-    
-.mobile-logo-center .ka-logo-img {
-    height: 35px !important;
-    width: auto !important;
-    max-width: 100px !important; /* Sangat pendek */
-    object-fit: cover !important;
-    object-position: left center !important;
-}
-    
-    /* Search di kanan */
-    .mobile-icons-right {
-        flex: 1;
-        display: flex;
-        justify-content: flex-end;
-        margin-left: auto;
-        order: 3;
-        align-items: center;
-        gap: 8px;
-    }
-    
-/* Panjangkan search button */
-.mobile-icons-right button[title="Search Products"] {
-    width: 200px !important; /* Tambah dari 80px ke 100px */
-    height: 35px !important;
-    font-size: 14px !important;
-    padding: 0 16px !important; /* Tambah padding */
-    border-radius: 18px !important;
-    background: #f8f9fa !important;
-    border: 1px solid #e5e5e5 !important;
-}
-    
-    /* Override icon-btn size untuk mobile */
-    .icon-btn {
-        width: 35px !important;
-        height: 35px !important;
-        font-size: 14px !important;
-    }
-}
-
-.mobile-bottom-nav {
-    height: 70px;
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-}
-
-.mobile-bottom-nav a {
-    transition: color 0.2s ease;
-    min-width: 60px;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
-
-/* Hover effect tetap menggunakan warna hitam */
-.mobile-bottom-nav a:hover {
-    color: #000000;
-}
-
-/* Add padding to body to prevent content being hidden behind bottom nav */
-@media (max-width: 767px) {
-    body {
-        padding-bottom: 70px;
-    }
-}
-
-/* Active state styling - WARNA HITAM BOLD */
-.mobile-bottom-nav a.text-black i {
-    transform: scale(1.1);
-}
-
-.mobile-bottom-nav a.font-bold {
-    font-weight: 700;
-}
-
-/* Cart badge animation */
-.mobile-bottom-nav .bg-red-500 {
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0.8;
-    }
-}
-</style>
 <!-- WhatsApp Floating Button -->
 <div id="whatsapp-button" class="whatsapp-float-btn">
     <a href="https://wa.me/6281313911391?text=Halo%20SneakerFlash!%20Saya%20ingin%20bertanya%20tentang%20produk%20sneakers" 
@@ -2058,144 +1045,6 @@ function mobileMenuDropdown() {
     </a>
 </div>
 
-<!-- CSS Styles untuk WhatsApp Button -->
-<style>
-    
-/* WhatsApp Floating Button */
-.whatsapp-float-btn {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 9999;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-}
-
-.whatsapp-btn-link {
-    display: flex;
-    align-items: center;
-    background: #25D366;
-    color: white;
-    padding: 15px 20px;
-    border-radius: 50px;
-    text-decoration: none;
-    box-shadow: 0 4px 15px rgba(37, 211, 102, 0.4);
-    transition: all 0.3s ease;
-    font-weight: 600;
-    font-size: 16px;
-    white-space: nowrap;
-    min-width: 60px;
-    justify-content: center;
-}
-
-.whatsapp-btn-link:hover {
-    background: #20b954;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(37, 211, 102, 0.6);
-    color: white;
-}
-
-.whatsapp-btn-link i {
-    font-size: 24px;
-    margin-right: 8px;
-}
-
-.whatsapp-text {
-    font-size: 14px;
-    font-weight: 600;
-}
-
-/* Mobile Responsive */
-@media (max-width: 768px) {
-    .whatsapp-float-btn {
-        bottom: 90px; /* Adjust untuk mobile bottom nav */
-        right: 15px;
-    }
-    
-    .whatsapp-btn-link {
-        padding: 12px 16px;
-        font-size: 14px;
-    }
-    
-    .whatsapp-btn-link i {
-        font-size: 22px;
-        margin-right: 6px;
-    }
-    
-    .whatsapp-text {
-        font-size: 13px;
-    }
-}
-
-/* Extra small screens - Show only icon */
-@media (max-width: 480px) {
-    .whatsapp-text {
-        display: none;
-    }
-    
-    .whatsapp-btn-link {
-        width: 56px;
-        height: 56px;
-        border-radius: 50%;
-        padding: 0;
-        justify-content: center;
-        align-items: center;
-    }
-    
-    .whatsapp-btn-link i {
-        margin: 0;
-        font-size: 28px;
-    }
-}
-
-/* Animation on load */
-@keyframes whatsappBounce {
-    0%, 100% {
-        transform: translateY(0);
-    }
-    50% {
-        transform: translateY(-10px);
-    }
-}
-
-.whatsapp-float-btn {
-    animation: whatsappBounce 2s infinite;
-}
-
-/* Pulse animation */
-.whatsapp-btn-link::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 0;
-    height: 0;
-    background: rgba(37, 211, 102, 0.3);
-    border-radius: 50%;
-    animation: whatsappPulse 2s infinite;
-    z-index: -1;
-}
-
-@keyframes whatsappPulse {
-    0% {
-        width: 0;
-        height: 0;
-        opacity: 1;
-    }
-    100% {
-        width: 100px;
-        height: 100px;
-        opacity: 0;
-    }
-}
-
-/* Hide on print */
-@media print {
-    .whatsapp-float-btn {
-        display: none !important;
-    }
-}
-</style>
 
 <!-- Optional: JavaScript untuk additional functionality -->
 <script>
@@ -2224,6 +1073,45 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('WhatsApp button clicked');
         // Tambahkan Google Analytics atau tracking lainnya di sini
         // gtag('event', 'click', { 'event_category': 'WhatsApp', 'event_label': 'Floating Button' });
+    });
+});
+
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Fungsi untuk memperbaiki spacing banner saat zoom
+    function fixBannerSpacing() {
+        const carouselWrapper = document.querySelector('.carousel-wrapper');
+        if (carouselWrapper) {
+            carouselWrapper.style.marginTop = '-1px';
+            
+            // Cari elemen di atas banner dan hapus margin/padding-nya
+            const header = document.querySelector('header');
+            if (header) header.style.marginBottom = '0';
+            
+            const nav = document.querySelector('nav');
+            if (nav) nav.style.marginBottom = '0';
+            
+            // Force semua slide gambar menggunakan contain
+            const slideImages = document.querySelectorAll('.carousel-slide img');
+            slideImages.forEach(img => {
+                img.style.objectFit = 'contain';
+                img.style.objectPosition = 'center';
+            });
+        }
+    }
+    
+    // Jalankan fungsi saat halaman dimuat
+    fixBannerSpacing();
+    
+    // Jalankan fungsi saat window di-resize (termasuk zoom)
+    window.addEventListener('resize', fixBannerSpacing);
+    
+    // Tangkap event zoom
+    window.addEventListener('wheel', function(e) {
+        if (e.ctrlKey) {
+            fixBannerSpacing();
+        }
     });
 });
 </script>

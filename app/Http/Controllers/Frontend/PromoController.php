@@ -207,8 +207,48 @@ private function validateUndianWithSpreadsheet($undianCode, $orderNumber, $platf
                 
                 // Cek apakah nomor pesanan cocok
                 if (strtoupper($dataNoPesanan) === strtoupper($orderNumber)) {
-                    // Cek apakah platform juga cocok
-                    if (strtoupper($dataPlatform) === strtoupper($platform)) {
+                    // Normalisasi platform untuk pengecekan
+                    $platformMatch = false;
+                    
+                    // Normalisasi platform (case-insensitive)
+                    $dataPlatformUpper = strtoupper($dataPlatform);
+                    $inputPlatformUpper = strtoupper($platform);
+                    
+                    // Cek kecocokan langsung
+                    if ($dataPlatformUpper === $inputPlatformUpper) {
+                        $platformMatch = true;
+                    } 
+                    // Cek mapping platform spesifik
+                    else {
+                        // Tokopedia ⟷ TOKPED
+                        if (($dataPlatformUpper === 'TOKPED' && $inputPlatformUpper === 'TOKOPEDIA') ||
+                            ($dataPlatformUpper === 'TOKOPEDIA' && $inputPlatformUpper === 'TOKPED')) {
+                            $platformMatch = true;
+                        }
+                        // Website / Website Sneakers Flash ⟷ WEB
+                        else if (($dataPlatformUpper === 'WEB' && ($inputPlatformUpper === 'WEBSITE' || $inputPlatformUpper === 'WEBSITE SNEAKERS FLASH')) ||
+                                (($inputPlatformUpper === 'WEB' && ($dataPlatformUpper === 'WEBSITE' || $dataPlatformUpper === 'WEBSITE SNEAKERS FLASH')))) {
+                            $platformMatch = true;
+                        }
+                        // WhatsApp ⟷ WA DLL
+                        else if (($dataPlatformUpper === 'WA DLL' && $inputPlatformUpper === 'WHATSAPP') ||
+                                ($dataPlatformUpper === 'WHATSAPP' && $inputPlatformUpper === 'WA DLL')) {
+                            $platformMatch = true;
+                        }
+                        // USS Event ⟷ USS
+                        else if (($dataPlatformUpper === 'USS' && $inputPlatformUpper === 'USS EVENT') ||
+                                ($dataPlatformUpper === 'USS EVENT' && $inputPlatformUpper === 'USS')) {
+                            $platformMatch = true;
+                        }
+                        // BliBli ⟷ BLIBI
+                        else if (($dataPlatformUpper === 'BLIBI' && $inputPlatformUpper === 'BLIBLI') ||
+                                ($dataPlatformUpper === 'BLIBLI' && $inputPlatformUpper === 'BLIBI')) {
+                            $platformMatch = true;
+                        }
+                    }
+                    
+                    // Cek hasil normalisasi platform
+                    if ($platformMatch) {
                         // Semua data cocok - sukses!
                         return [
                             'success' => true,
