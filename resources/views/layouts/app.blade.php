@@ -1030,10 +1030,10 @@ function mobileMenuDropdown() {
         <div class="border-t border-gray-700 mt-8 pt-8 text-center">
             <div class="max-w-7xl mx-auto px-4 lg:px-8">
                 <div class="flex justify-center space-x-6">
-                    <a href="https://instagram.com/sneakersflash" target="_blank" class="text-gray-300 hover:text-white transition-colors">
+                    <a href="https://instagram.com/sneakers_flash" target="_blank" class="text-gray-300 hover:text-white transition-colors">
                         <i class="fab fa-instagram text-2xl"></i>
                     </a>
-                    <a href="https://tiktok.com/@sneakersflash" target="_blank" class="text-gray-300 hover:text-white transition-colors">
+                    <a href="https://tiktok.com/@sneakers_flash" target="_blank" class="text-gray-300 hover:text-white transition-colors">
                         <i class="fab fa-tiktok text-2xl"></i>
                     </a>
                     <a href="https://facebook.com/sneakersflash" target="_blank" class="text-gray-300 hover:text-white transition-colors">
