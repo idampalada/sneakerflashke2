@@ -220,159 +220,246 @@ private function validateUndianWithSpreadsheet($undianCode, $orderNumber, $platf
             'size' => strlen($spreadsheetData)
         ]);
         
-        // Pendekatan Regex: Cari langsung di HTML
-        $undianCodeUpper = strtoupper($undianCode);
-        $orderNumberUpper = strtoupper($orderNumber);
-        $platformUpper = strtoupper($platform);
+        // Cari semua baris dalam tabel
+        preg_match_all('/<tr[^>]*>(.*?)<\/tr>/is', $spreadsheetData, $allRowMatches);
+        $allRows = $allRowMatches[0] ?? [];
         
-        // Log untuk debugging
-        $undianCount = substr_count($spreadsheetData, $undianCodeUpper);
-        $orderCount = substr_count($spreadsheetData, $orderNumberUpper);
+        // Deteksi baris header (biasanya berisi "NOMOR UNDIAN", "No Pesanan", "Market Place")
+        $headerRow = null;
+        $headerCells = [];
+        $noPesananIndex = null;
+        $platformIndex = null;
+        $nomorUndianIndex = null;
         
-        \Log::info('Pengecekan string mentah', [
-            'undian_occurrences' => $undianCount,
-            'order_occurrences' => $orderCount
-        ]);
-        
-        // Cari baris dengan nomor undian
-        $pattern = '/<tr[^>]*>.*?' . preg_quote($undianCodeUpper, '/') . '.*?<\/tr>/is';
-        
-        if (preg_match_all($pattern, $spreadsheetData, $rowMatches)) {
-            \Log::info('Baris dengan nomor undian ditemukan', [
-                'count' => count($rowMatches[0])
-            ]);
+        // Cari baris header (biasanya dalam 12 baris pertama)
+        for ($i = 0; $i < min(12, count($allRows)); $i++) {
+            preg_match_all('/<td[^>]*>(.*?)<\/td>/is', $allRows[$i], $cellMatches);
+            $cells = array_map(function($cell) {
+                return trim(strip_tags($cell));
+            }, $cellMatches[1] ?? []);
             
-            // Periksa setiap baris yang berisi nomor undian
-            foreach ($rowMatches[0] as $rowHtml) {
-                // Cek apakah nomor pesanan ada di baris ini
-                if (stripos($rowHtml, $orderNumberUpper) !== false) {
-                    \Log::info('Nomor pesanan juga ditemukan di baris ini');
+            // Periksa apakah ini adalah baris header
+            $isHeaderRow = false;
+            foreach ($cells as $j => $cell) {
+                $cellUpper = strtoupper($cell);
+                if (strpos($cellUpper, 'NOMOR UNDIAN') !== false || 
+                    strpos($cellUpper, 'NO PESANAN') !== false || 
+                    strpos($cellUpper, 'MARKET PLACE') !== false) {
+                    $isHeaderRow = true;
                     
-                    // Extract cells dari baris ini
-                    $cellPattern = '/<td[^>]*>(.*?)<\/td>/is';
-                    if (preg_match_all($cellPattern, $rowHtml, $cellMatches)) {
-                        $cells = array_map('strip_tags', $cellMatches[1]);
-                        
-                        // PERBAIKAN: Fokus hanya pada kolom Market Place yang benar
-                        // Kolom Market Place biasanya di indeks 2 (kolom C)
-                        $platformIndex = null;
-                        
-                        // Tentukan indeks platform berdasarkan header
-                        for ($i = 0; $i < count($cells); $i++) {
-                            $cellUpper = strtoupper(trim($cells[$i]));
-                            if ($cellUpper == 'MARKET PLACE' || $cellUpper == 'MARKETPLACE' || $cellUpper == 'PLATFORM') {
-                                $platformIndex = $i + 1;
-                                break;
-                            }
-                        }
-                        
-                        // Jika tidak menemukan header, gunakan indeks default
-                        if ($platformIndex === null) {
-                            // Coba temukan sel yang terlihat seperti platform pada awal baris
-                            for ($i = 0; $i < min(6, count($cells)); $i++) {
-                                $cellUpper = strtoupper(trim($cells[$i]));
-                                if (in_array($cellUpper, ['SHOPEE', 'TOKOPEDIA', 'TOKPED', 'TIKTOK', 'BLIBLI', 'WA DLL', 'WHATSAPP', 'WEB', 'WEBSITE', 'USS', 'USS EVENT'])) {
-                                    $platformIndex = $i;
-                                    break;
-                                }
-                            }
-                        }
-                        
-                        // Jika masih tidak menemukan, gunakan indeks default 2
-                        if ($platformIndex === null) {
-                            $platformIndex = 2; // Asumsi Market Place di kolom C
-                        }
-                        
-                        // Log sel untuk debugging
-                        \Log::info('Isi sel platform di baris ini', [
-                            'platformIndex' => $platformIndex,
-                            'platformValue' => isset($cells[$platformIndex]) ? $cells[$platformIndex] : 'N/A'
-                        ]);
-                        
-                        // Periksa hanya sel platform yang teridentifikasi
-                        if (isset($cells[$platformIndex])) {
-                            $dataPlatform = trim($cells[$platformIndex]);
-                            $dataPlatformUpper = strtoupper($dataPlatform);
-                            
-                            \Log::info('Memeriksa platform', [
-                                'dataPlatform' => $dataPlatform,
-                                'inputPlatform' => $platform
-                            ]);
-                            
-                            // Cek kecocokan platform
-                            $platformMatch = false;
-                            
-                            // Pencocokan langsung
-                            if ($dataPlatformUpper === $platformUpper) {
-                                $platformMatch = true;
-                                \Log::info('Platform cocok persis');
-                            }
-                            // Pencocokan mapping
-                            else if (
-                                // Tokopedia ⟷ TOKPED
-                                ($dataPlatformUpper === 'TOKPED' && $platformUpper === 'TOKOPEDIA') ||
-                                ($dataPlatformUpper === 'TOKOPEDIA' && $platformUpper === 'TOKPED') ||
-                                
-                                // Website / Website Sneakers Flash ⟷ WEB
-                                ($dataPlatformUpper === 'WEB' && ($platformUpper === 'WEBSITE' || $platformUpper === 'WEBSITE SNEAKERS FLASH')) ||
-                                ($platformUpper === 'WEB' && ($dataPlatformUpper === 'WEBSITE' || $dataPlatformUpper === 'WEBSITE SNEAKERS FLASH')) ||
-                                
-                                // WhatsApp ⟷ WA DLL
-                                ($dataPlatformUpper === 'WA DLL' && $platformUpper === 'WHATSAPP') ||
-                                ($dataPlatformUpper === 'WHATSAPP' && $platformUpper === 'WA DLL') ||
-                                
-                                // USS Event ⟷ USS
-                                ($dataPlatformUpper === 'USS' && $platformUpper === 'USS EVENT') ||
-                                ($dataPlatformUpper === 'USS EVENT' && $platformUpper === 'USS') ||
-                                
-                                // BliBli ⟷ BLIBI
-                                ($dataPlatformUpper === 'BLIBI' && $platformUpper === 'BLIBLI') ||
-                                ($dataPlatformUpper === 'BLIBLI' && $platformUpper === 'BLIBI')
-                            ) {
-                                $platformMatch = true;
-                                \Log::info('Platform cocok via mapping');
-                            } else {
-                                \Log::warning('Platform TIDAK cocok', [
-                                    'dataPlatform' => $dataPlatformUpper,
-                                    'inputPlatform' => $platformUpper
-                                ]);
-                            }
-                            
-                            if ($platformMatch) {
-                                \Log::info('Validasi berhasil - Platform cocok', [
-                                    'foundPlatform' => $dataPlatform
-                                ]);
-                                
-                                return [
-                                    'success' => true,
-                                    'message' => 'Data valid',
-                                    'data' => [
-                                        'NOMOR UNDIAN' => $undianCode,
-                                        'No Pesanan' => $orderNumber,
-                                        'Market Place' => $dataPlatform,
-                                        'Kolom' => 'NOMOR UNDIAN'
-                                    ]
-                                ];
-                            }
-                        }
-                        
-                        // Jika sampai sini, berarti platform tidak cocok
-                        return [
-                            'success' => false,
-                            'message' => 'Platform pembelian tidak sesuai dengan data. Silakan periksa kembali.',
-                        ];
+                    // Identifikasi indeks kolom penting
+                    if (strpos($cellUpper, 'NOMOR UNDIAN') !== false) {
+                        $nomorUndianIndex = $j;
+                    } else if (strpos($cellUpper, 'NO PESANAN') !== false) {
+                        $noPesananIndex = $j;
+                    } else if (strpos($cellUpper, 'MARKET PLACE') !== false || strpos($cellUpper, 'MARKETPLACE') !== false) {
+                        $platformIndex = $j;
                     }
                 }
             }
             
-            // Jika sampai di sini, nomor undian ditemukan tetapi tidak ada kecocokan dengan nomor pesanan
-            return [
-                'success' => false,
-                'message' => 'Nomor pesanan tidak sesuai dengan nomor undian. Silakan periksa kembali.',
-            ];
+            if ($isHeaderRow) {
+                $headerRow = $i;
+                $headerCells = $cells;
+                break;
+            }
+        }
+        
+        // Fallback jika header tidak ditemukan (gunakan default)
+        if ($nomorUndianIndex === null) {
+            $nomorUndianIndex = 8; // Default: Kolom I
+            \Log::warning('Nomor Undian column not identified, using default index 8');
+        }
+        
+        if ($noPesananIndex === null) {
+            $noPesananIndex = 4; // Default: Kolom E
+            \Log::warning('No Pesanan column not identified, using default index 4');
+        }
+        
+        if ($platformIndex === null) {
+            $platformIndex = 2; // Default: Kolom C
+            \Log::warning('Platform column not identified, using default index 2');
+        }
+        
+        \Log::info('Kolom teridentifikasi', [
+            'nomorUndianIndex' => $nomorUndianIndex,
+            'noPesananIndex' => $noPesananIndex,
+            'platformIndex' => $platformIndex
+        ]);
+        
+        // Uppercase untuk normalisasi
+        $undianCodeUpper = strtoupper($undianCode);
+        $orderNumberUpper = strtoupper($orderNumber);
+        $platformUpper = strtoupper($platform);
+        
+        // Temukan baris dengan undian code yang cocok
+        $matchingRow = null;
+        $matchingCells = [];
+        
+        // Mulai pencarian dari baris setelah header (jika header ditemukan)
+        $startIndex = ($headerRow !== null) ? $headerRow + 1 : 0;
+        
+        for ($i = $startIndex; $i < count($allRows); $i++) {
+            preg_match_all('/<td[^>]*>(.*?)<\/td>/is', $allRows[$i], $cellMatches);
+            $cells = array_map(function($cell) {
+                return trim(strip_tags($cell));
+            }, $cellMatches[1] ?? []);
+            
+            // Pastikan array cells cukup panjang untuk mencakup semua indeks kolom
+            if (count($cells) <= max($nomorUndianIndex, $noPesananIndex, $platformIndex)) {
+                continue;
+            }
+            
+            // Ambil nilai dari sel yang sesuai
+            $rowUndianCode = strtoupper(trim($cells[$nomorUndianIndex] ?? ''));
+            
+            // Jika nomor undian cocok
+            if ($rowUndianCode === $undianCodeUpper) {
+                $matchingRow = $i;
+                $matchingCells = $cells;
+                
+                // Log hasil
+                \Log::info('Baris dengan nomor undian ditemukan', [
+                    'rowIndex' => $i,
+                    'undianCodeInRow' => $rowUndianCode
+                ]);
+                
+                // Validasi nomor pesanan pada baris ini
+                $rowOrderNumber = strtoupper(trim($cells[$noPesananIndex] ?? ''));
+                
+                \Log::info('Memeriksa nomor pesanan di baris yang sama', [
+                    'rowOrderNumber' => $rowOrderNumber,
+                    'inputOrderNumber' => $orderNumberUpper
+                ]);
+                
+                // Jika nomor pesanan tidak cocok
+                if ($rowOrderNumber !== $orderNumberUpper) {
+                    \Log::warning('Nomor pesanan tidak cocok dengan baris', [
+                        'rowOrderNumber' => $rowOrderNumber,
+                        'inputOrderNumber' => $orderNumberUpper
+                    ]);
+                    
+                    return [
+                        'success' => false,
+                        'message' => 'Nomor pesanan tidak sesuai dengan nomor undian. Silakan periksa kembali.',
+                    ];
+                }
+                
+                // Jika sampai di sini, nomor pesanan cocok - periksa platform
+                $rowPlatform = trim($cells[$platformIndex] ?? '');
+                $rowPlatformUpper = strtoupper($rowPlatform);
+                
+                \Log::info('Memeriksa platform', [
+                    'rowPlatform' => $rowPlatform,
+                    'inputPlatform' => $platform
+                ]);
+                
+                // Cek kecocokan platform
+                $platformMatch = false;
+                
+                // Pencocokan langsung
+                if ($rowPlatformUpper === $platformUpper) {
+                    $platformMatch = true;
+                    \Log::info('Platform cocok persis');
+                }
+                // Pengecekan untuk '(ISI MANUAL)' atau '(ISI MANUAL)&QUOT;'
+                else if (
+                    strpos($rowPlatformUpper, '(ISI MANUAL)') !== false || 
+                    $rowPlatformUpper === 'MANUAL' ||
+                    $rowPlatformUpper === 'DIISI MANUAL'
+                ) {
+                    $platformMatch = true;
+                    \Log::info('Platform cocok karena data platform adalah (isi manual)');
+                }
+                // Pencocokan mapping
+                else if (
+                    // Tokopedia ⟷ TOKPED
+                    ($rowPlatformUpper === 'TOKPED' && $platformUpper === 'TOKOPEDIA') ||
+                    ($rowPlatformUpper === 'TOKOPEDIA' && $platformUpper === 'TOKPED') ||
+                    
+                    // Website / Website Sneakers Flash ⟷ WEB
+                    ($rowPlatformUpper === 'WEB' && ($platformUpper === 'WEBSITE' || $platformUpper === 'WEBSITE SNEAKERS FLASH')) ||
+                    ($platformUpper === 'WEB' && ($rowPlatformUpper === 'WEBSITE' || $rowPlatformUpper === 'WEBSITE SNEAKERS FLASH')) ||
+                    
+                    // WhatsApp ⟷ WA DLL
+                    ($rowPlatformUpper === 'WA DLL' && $platformUpper === 'WHATSAPP') ||
+                    ($rowPlatformUpper === 'WHATSAPP' && $rowPlatformUpper === 'WA DLL') ||
+                    
+                    // USS Event ⟷ USS
+                    ($rowPlatformUpper === 'USS' && $platformUpper === 'USS EVENT') ||
+                    ($rowPlatformUpper === 'USS EVENT' && $rowPlatformUpper === 'USS') ||
+                    
+                    // BliBli ⟷ BLIBI
+                    ($rowPlatformUpper === 'BLIBI' && $platformUpper === 'BLIBLI') ||
+                    ($rowPlatformUpper === 'BLIBLI' && $rowPlatformUpper === 'BLIBI') ||
+                    
+                    // Shopee ⟷ SHOPEE OFFICIAL / SHOPPE / SHP
+                    ($rowPlatformUpper === 'SHOPEE OFFICIAL' && $platformUpper === 'SHOPEE') ||
+                    ($rowPlatformUpper === 'SHOPPE' && $platformUpper === 'SHOPEE') ||
+                    ($rowPlatformUpper === 'SHP' && $platformUpper === 'SHOPEE') ||
+                    ($platformUpper === 'SHOPEE OFFICIAL' && $rowPlatformUpper === 'SHOPEE') ||
+                    ($platformUpper === 'SHOPPE' && $rowPlatformUpper === 'SHOPEE') ||
+                    ($platformUpper === 'SHP' && $rowPlatformUpper === 'SHOPEE')
+                ) {
+                    $platformMatch = true;
+                    \Log::info('Platform cocok via mapping');
+                } else {
+                    \Log::warning('Platform TIDAK cocok', [
+                        'rowPlatform' => $rowPlatformUpper,
+                        'inputPlatform' => $platformUpper
+                    ]);
+                }
+                
+                if ($platformMatch) {
+                    \Log::info('Validasi berhasil - Platform cocok', [
+                        'foundPlatform' => $rowPlatform
+                    ]);
+                    
+                    // Cek jika nomor pesanan sudah pernah digunakan untuk nomor undian lain di database
+                    if (Schema::hasTable('promo_onedecade_entries')) {
+                        $existingEntry = DB::table('promo_onedecade_entries')
+                            ->where('order_number', $orderNumber)
+                            ->where('undian_code', '!=', $undianCode)
+                            ->first();
+                            
+                        if ($existingEntry) {
+                            \Log::warning('Nomor pesanan sudah digunakan untuk nomor undian lain di database', [
+                                'order_number' => $orderNumber,
+                                'existing_undian_code' => $existingEntry->undian_code
+                            ]);
+                            
+                            return [
+                                'success' => false,
+                                'message' => 'Nomor pesanan ini sudah digunakan untuk nomor undian ' . 
+                                             $existingEntry->undian_code . '. Silakan periksa kembali.',
+                            ];
+                        }
+                    }
+                    
+                    return [
+                        'success' => true,
+                        'message' => 'Data valid',
+                        'data' => [
+                            'NOMOR UNDIAN' => $undianCode,
+                            'No Pesanan' => $orderNumber,
+                            'Market Place' => $rowPlatform,
+                            'Kolom' => 'NOMOR UNDIAN'
+                        ]
+                    ];
+                } else {
+                    return [
+                        'success' => false,
+                        'message' => 'Platform pembelian tidak sesuai dengan data. Silakan periksa kembali.',
+                    ];
+                }
+            }
         }
         
         // Jika sampai di sini, berarti tidak ada nomor undian yang ditemukan
+        \Log::warning('Nomor undian tidak ditemukan di spreadsheet', [
+            'undianCode' => $undianCode
+        ]);
+        
         return [
             'success' => false,
             'message' => 'Kode tidak ditemukan. Silakan periksa kembali.',

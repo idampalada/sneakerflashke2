@@ -170,7 +170,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <form id="verificationForm" action="{{ route('promo.onedecade.verify') }}" method="POST">
         @csrf
         <div class="form-input">
-          <input type="text" name="undian_code" placeholder="Nomor Undian / Kode Kupon" value="{{ old('undian_code') }}" required />
+          <input type="text" name="undian_code" placeholder="Nomor Undian / Kode Kuponn" value="{{ old('undian_code') }}" required />
         </div>
         <div class="form-input">
           <input type="text" name="order_number" placeholder="Nomor Pesanan" value="{{ old('order_number') }}" required />

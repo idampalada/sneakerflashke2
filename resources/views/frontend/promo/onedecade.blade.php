@@ -561,9 +561,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     <form id="verificationForm" action="{{ route('promo.onedecade.verify') }}" method="POST">
                         @csrf
                         
-                        <div class="form-input">
-                            <input type="text" name="undian_code" placeholder="Nomor Undian / Kode Kupon" required>
-                        </div>
+<div class="form-input">
+    <input type="text" name="undian_code" placeholder="SF-DKD-XXXX (harus lengkap)" required>
+</div>
                         
                         <div class="form-input">
                             <input type="text" name="order_number" placeholder="Nomor Pesanan" required>
