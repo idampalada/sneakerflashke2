@@ -52,7 +52,7 @@
 
 
     <script>
-        function carousel() {
+function carousel() {
     return {
         currentSlide: 0,
         slides: [
@@ -81,70 +81,138 @@
         ],
         
         init() {
-            this.startAutoplay();
-            // Update image source based on screen size
-            this.updateImageSources();
+            // Deteksi perangkat mobile saat inisialisasi
+            const isMobile = window.innerWidth <= 767;
             
-            // Listen for window resize
-            window.addEventListener('resize', () => {
-                this.updateImageSources();
+            // Set flag untuk menandai jika sudah inisialisasi
+            this.initialized = false;
+            
+            // Aplikasikan gambar yang benar sebelum render
+            this.$nextTick(() => {
+                this.preloadImages();
+                this.applyCorrectImages(isMobile);
+                this.initialized = true;
             });
             
-            // Tambahkan listener untuk zoom event
+            // Mulai autoplay setelah gambar sudah benar
+            this.startAutoplay();
+            
+            // Listen for window resize dengan throttling
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    const newIsMobile = window.innerWidth <= 767;
+                    // Hanya update jika status mobile/desktop berubah
+                    if (isMobile !== newIsMobile) {
+                        this.applyCorrectImages(newIsMobile);
+                    }
+                }, 100);
+            });
+            
+            // Tangkap event zoom tanpa mengubah src gambar
             window.addEventListener('wheel', (e) => {
                 if (e.ctrlKey) {
-                    // User sedang zoom, pastikan banner tetap konsisten
-                    this.fixImageOnZoom();
+                    // Hanya memperbaiki styling
+                    this.fixImageStylingOnly();
                 }
             });
             
-            // Tambahkan listener untuk touchscreen pinch zoom
+            // Event listener untuk touchscreen pinch zoom
             window.addEventListener('gesturechange', () => {
-                this.fixImageOnZoom();
+                this.fixImageStylingOnly();
             });
         },
         
-        updateImageSources() {
+        // Fungsi untuk memuat gambar terlebih dahulu
+        preloadImages() {
             const isMobile = window.innerWidth <= 767;
+            
+            // Preload semua gambar yang akan digunakan
+            this.slides.forEach(slide => {
+                const imgUrl = isMobile ? slide.mobile : slide.desktop;
+                if (imgUrl) {
+                    const img = new Image();
+                    img.src = imgUrl;
+                }
+            });
+        },
+        
+        // Aplikasikan gambar yang benar tanpa delay
+        applyCorrectImages(isMobile) {
             const slideImages = document.querySelectorAll('.carousel-slide img');
             
             slideImages.forEach((img, index) => {
                 if (this.slides[index]) {
-                    img.src = isMobile ? this.slides[index].mobile : this.slides[index].desktop;
-                    // Tambahkan styling fix untuk mencegah perubahan saat zoom
-                    this.applyFixedImageStyling(img);
+                    const imgSrc = isMobile ? this.slides[index].mobile : this.slides[index].desktop;
+                    
+                    // Update src secara langsung jika berbeda
+                    if (img.src !== imgSrc) {
+                        img.src = imgSrc;
+                    }
+                    
+                    // Terapkan styling yang benar berdasarkan perangkat
+                    this.applyImageStyling(img, isMobile);
                 }
             });
         },
         
-        fixImageOnZoom() {
-            // Metode ini akan dipanggil saat user melakukan zoom
+        // Fungsi untuk memperbaiki styling tanpa mengubah src
+        fixImageStylingOnly() {
+            const isMobile = window.innerWidth <= 767;
             const slideImages = document.querySelectorAll('.carousel-slide img');
+            
             slideImages.forEach(img => {
-                this.applyFixedImageStyling(img);
+                this.applyImageStyling(img, isMobile);
             });
             
-            // Pastikan container juga tetap dengan ukuran yang benar
+            // Perbaiki container juga
+            this.fixContainerStyling(isMobile);
+        },
+        
+        // Aplikasikan styling yang sesuai berdasarkan perangkat
+        applyImageStyling(img, isMobile) {
+            // Gunakan styling berbeda untuk mobile dan desktop
+            if (isMobile) {
+                // Mobile - gunakan cover untuk mengisi penuh
+                img.style.objectFit = 'cover';
+                img.style.objectPosition = 'center';
+                img.style.width = '100%';
+                img.style.height = '100%';
+            } else {
+                // Desktop - gunakan contain agar tidak terpotong
+                img.style.objectFit = 'contain';
+                img.style.objectPosition = 'center';
+                img.style.width = '100%';
+                img.style.height = '100%';
+            }
+            
+            // Styling umum untuk performa
+            img.style.transform = 'translateZ(0)';
+            img.style.backfaceVisibility = 'hidden';
+            img.style.willChange = 'transform';
+            
+            // Tambahkan class untuk identifikasi
+            if (isMobile) {
+                img.classList.add('mobile-banner');
+            } else {
+                img.classList.remove('mobile-banner');
+            }
+        },
+        
+        // Perbaiki styling container
+        fixContainerStyling(isMobile) {
             const container = document.querySelector('.carousel-container');
             if (container) {
-                container.style.height = '480px';
+                // Set tinggi yang berbeda berdasarkan perangkat
+                container.style.height = isMobile ? '300px' : '480px';
                 container.style.transform = 'translateZ(0)';
                 container.style.backfaceVisibility = 'hidden';
                 container.style.willChange = 'transform';
             }
         },
         
-        applyFixedImageStyling(img) {
-            // Terapkan styling yang konsisten ke semua gambar carousel
-            img.style.objectFit = 'contain';
-            img.style.objectPosition = 'center';
-            img.style.width = '100%';
-            img.style.height = '100%';
-            img.style.transform = 'translateZ(0)';
-            img.style.backfaceVisibility = 'hidden';
-            img.style.willChange = 'transform';
-        },
-        
+        // Navigasi carousel - tidak diubah
         nextSlide() {
             this.currentSlide = (this.currentSlide + 1) % this.slides.length;
         },
@@ -159,12 +227,12 @@
         
         startAutoplay() {
             if (this.slides.length > 1) {
-                setInterval(() => {
+                this.autoplayInterval = setInterval(() => {
                     this.nextSlide();
                 }, 4000);
             }
         }
-    }
+    };
 }
         // Navigation dropdown functionality
         function navigationDropdown() {
