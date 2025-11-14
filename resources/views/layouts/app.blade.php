@@ -31,10 +31,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <!-- Alpine.js -->
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <!-- Vite Assets (termasuk home.css) -->
-   <link rel="stylesheet" href="{{ asset('css/app.css') }}">
+
 <link rel="stylesheet" href="{{ asset('css/home.css') }}">
 <link rel="stylesheet" href="{{ asset('css/social-media-fix.css') }}">
-<script src="{{ asset('js/app.js') }}"></script>
+
     <script>
   document.addEventListener('alpine:init', () => {
     Alpine.store('ui', {

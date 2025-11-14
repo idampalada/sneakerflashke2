@@ -19,6 +19,7 @@ class Dashboard extends Page
     protected static ?string $navigationLabel = 'Ginee Optimization';
     protected static ?int $navigationSort = 1;
     protected static ?string $navigationGroup = 'Ginee Management';
+    protected static ?string $slug = 'ginee-optimization-dashboard';
 
     /**
      * Mount method to initialize page data

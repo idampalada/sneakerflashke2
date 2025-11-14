@@ -299,6 +299,9 @@ private function validateUndianWithSpreadsheet($undianCode, $orderNumber, $platf
         // Mulai pencarian dari baris setelah header (jika header ditemukan)
         $startIndex = ($headerRow !== null) ? $headerRow + 1 : 0;
         
+        // MODIFIKASI: Daftar kolom yang akan diperiksa untuk nomor undian (I, J, K, L)
+        $nomorUndianIndices = [$nomorUndianIndex, 9, 10, 11]; // 8 (I), 9 (J), 10 (K), 11 (L)
+        
         for ($i = $startIndex; $i < count($allRows); $i++) {
             preg_match_all('/<td[^>]*>(.*?)<\/td>/is', $allRows[$i], $cellMatches);
             $cells = array_map(function($cell) {
@@ -306,22 +309,37 @@ private function validateUndianWithSpreadsheet($undianCode, $orderNumber, $platf
             }, $cellMatches[1] ?? []);
             
             // Pastikan array cells cukup panjang untuk mencakup semua indeks kolom
-            if (count($cells) <= max($nomorUndianIndex, $noPesananIndex, $platformIndex)) {
+            if (count($cells) <= max($nomorUndianIndices[0], $noPesananIndex, $platformIndex)) {
                 continue;
             }
             
-            // Ambil nilai dari sel yang sesuai
-            $rowUndianCode = strtoupper(trim($cells[$nomorUndianIndex] ?? ''));
+            // MODIFIKASI: Periksa semua kolom nomor undian potensial (I, J, K, L)
+            $foundMatch = false;
+            $matchingNomorUndianIndex = null;
             
-            // Jika nomor undian cocok
-            if ($rowUndianCode === $undianCodeUpper) {
+            foreach ($nomorUndianIndices as $index) {
+                if (isset($cells[$index])) {
+                    $rowUndianCode = strtoupper(trim($cells[$index]));
+                    
+                    // Jika nomor undian cocok di salah satu kolom
+                    if ($rowUndianCode === $undianCodeUpper) {
+                        $foundMatch = true;
+                        $matchingNomorUndianIndex = $index;
+                        break;
+                    }
+                }
+            }
+            
+            // Jika nomor undian cocok di salah satu kolom
+            if ($foundMatch) {
                 $matchingRow = $i;
                 $matchingCells = $cells;
                 
                 // Log hasil
                 \Log::info('Baris dengan nomor undian ditemukan', [
                     'rowIndex' => $i,
-                    'undianCodeInRow' => $rowUndianCode
+                    'columnIndex' => $matchingNomorUndianIndex,
+                    'undianCodeInRow' => $undianCodeUpper
                 ]);
                 
                 // Validasi nomor pesanan pada baris ini
@@ -436,6 +454,11 @@ private function validateUndianWithSpreadsheet($undianCode, $orderNumber, $platf
                         }
                     }
                     
+                    // MODIFIKASI: Tambahkan informasi kolom yang digunakan untuk menemukan nomor undian
+                    $columnLetters = ['I', 'J', 'K', 'L'];
+                    $columnIndex = $matchingNomorUndianIndex - 8; // Konversi indeks ke posisi dalam array (8->0, 9->1, dst)
+                    $columnLetter = isset($columnLetters[$columnIndex]) ? $columnLetters[$columnIndex] : '?';
+                    
                     return [
                         'success' => true,
                         'message' => 'Data valid',
@@ -443,7 +466,7 @@ private function validateUndianWithSpreadsheet($undianCode, $orderNumber, $platf
                             'NOMOR UNDIAN' => $undianCode,
                             'No Pesanan' => $orderNumber,
                             'Market Place' => $rowPlatform,
-                            'Kolom' => 'NOMOR UNDIAN'
+                            'Kolom' => 'NOMOR UNDIAN (Kolom ' . $columnLetter . ')'
                         ]
                     ];
                 } else {
