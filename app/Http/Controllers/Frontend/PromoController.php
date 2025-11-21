@@ -230,6 +230,7 @@ private function validateUndianWithSpreadsheet($undianCode, $orderNumber, $platf
         $noPesananIndex = null;
         $platformIndex = null;
         $nomorUndianIndex = null;
+        $jumlahKuponIndex = null; // TAMBAHAN: untuk kolom JUMLAH KUPON
         
         // Cari baris header (biasanya dalam 12 baris pertama)
         for ($i = 0; $i < min(12, count($allRows)); $i++) {
@@ -244,7 +245,8 @@ private function validateUndianWithSpreadsheet($undianCode, $orderNumber, $platf
                 $cellUpper = strtoupper($cell);
                 if (strpos($cellUpper, 'NOMOR UNDIAN') !== false || 
                     strpos($cellUpper, 'NO PESANAN') !== false || 
-                    strpos($cellUpper, 'MARKET PLACE') !== false) {
+                    strpos($cellUpper, 'MARKET PLACE') !== false ||
+                    strpos($cellUpper, 'JUMLAH KUPON') !== false) { // TAMBAHAN
                     $isHeaderRow = true;
                     
                     // Identifikasi indeks kolom penting
@@ -254,6 +256,8 @@ private function validateUndianWithSpreadsheet($undianCode, $orderNumber, $platf
                         $noPesananIndex = $j;
                     } else if (strpos($cellUpper, 'MARKET PLACE') !== false || strpos($cellUpper, 'MARKETPLACE') !== false) {
                         $platformIndex = $j;
+                    } else if (strpos($cellUpper, 'JUMLAH KUPON') !== false) { // TAMBAHAN
+                        $jumlahKuponIndex = $j;
                     }
                 }
             }
@@ -281,10 +285,16 @@ private function validateUndianWithSpreadsheet($undianCode, $orderNumber, $platf
             \Log::warning('Platform column not identified, using default index 2');
         }
         
+        if ($jumlahKuponIndex === null) { // TAMBAHAN
+            $jumlahKuponIndex = 7; // Default: Kolom H
+            \Log::warning('JUMLAH KUPON column not identified, using default index 7');
+        }
+        
         \Log::info('Kolom teridentifikasi', [
             'nomorUndianIndex' => $nomorUndianIndex,
             'noPesananIndex' => $noPesananIndex,
-            'platformIndex' => $platformIndex
+            'platformIndex' => $platformIndex,
+            'jumlahKuponIndex' => $jumlahKuponIndex // TAMBAHAN
         ]);
         
         // Uppercase untuk normalisasi
@@ -433,25 +443,108 @@ private function validateUndianWithSpreadsheet($undianCode, $orderNumber, $platf
                         'foundPlatform' => $rowPlatform
                     ]);
                     
-                    // Cek jika nomor pesanan sudah pernah digunakan untuk nomor undian lain di database
+                    // ========================================================================
+                    // PERBAIKAN VALIDASI MULTI-KUPON
+                    // Ganti validasi lama dengan validasi baru yang support multi-kupon
+                    // ========================================================================
+                    
                     if (Schema::hasTable('promo_onedecade_entries')) {
-                        $existingEntry = DB::table('promo_onedecade_entries')
+                        
+                        // STEP 1: Ambil JUMLAH KUPON dari spreadsheet
+                        $jumlahKuponValue = isset($matchingCells[$jumlahKuponIndex]) ? 
+                                            (int)trim($matchingCells[$jumlahKuponIndex]) : 1;
+                        
+                        // Jika nilai 0 atau kosong, default ke 1
+                        if ($jumlahKuponValue <= 0) {
+                            $jumlahKuponValue = 1;
+                        }
+                        
+                        // STEP 2: Hitung berapa kali nomor pesanan ini sudah redeem
+                        $redeemCount = DB::table('promo_onedecade_entries')
                             ->where('order_number', $orderNumber)
-                            ->where('undian_code', '!=', $undianCode)
-                            ->first();
-                            
-                        if ($existingEntry) {
-                            \Log::warning('Nomor pesanan sudah digunakan untuk nomor undian lain di database', [
+                            ->count();
+                        
+                        \Log::info('Validasi JUMLAH KUPON', [
+                            'order_number' => $orderNumber,
+                            'jumlah_kupon_spreadsheet' => $jumlahKuponValue,
+                            'redeem_count_sekarang' => $redeemCount,
+                            'undian_code_input' => $undianCode
+                        ]);
+                        
+                        // STEP 3: Cek apakah sudah mencapai batas JUMLAH KUPON
+                        if ($redeemCount >= $jumlahKuponValue) {
+                            \Log::warning('Batas JUMLAH KUPON tercapai', [
                                 'order_number' => $orderNumber,
-                                'existing_undian_code' => $existingEntry->undian_code
+                                'jumlah_kupon_limit' => $jumlahKuponValue,
+                                'sudah_redeem' => $redeemCount
                             ]);
                             
                             return [
                                 'success' => false,
-                                'message' => 'Nomor pesanan ini sudah digunakan untuk nomor undian ' . 
-                                             $existingEntry->undian_code . '. Silakan periksa kembali.',
+                                'message' => 'Nomor pesanan ini sudah mencapai batas maksimal redeem kupon (' . 
+                                             $jumlahKuponValue . ' kupon). Anda sudah menggunakan semua kupon yang tersedia.',
                             ];
                         }
+                        
+                        // STEP 4: Cek apakah nomor undian yang SAMA sudah pernah digunakan
+                        // (mencegah duplikasi nomor undian yang sama untuk nomor pesanan yang sama)
+                        $duplicateUndian = DB::table('promo_onedecade_entries')
+                            ->where('order_number', $orderNumber)
+                            ->where('undian_code', $undianCode)
+                            ->first();
+                        
+                        if ($duplicateUndian) {
+                            \Log::warning('Nomor undian duplikat untuk nomor pesanan yang sama', [
+                                'order_number' => $orderNumber,
+                                'undian_code' => $undianCode
+                            ]);
+                            
+                            return [
+                                'success' => false,
+                                'message' => 'Nomor undian ' . $undianCode . ' sudah pernah digunakan untuk nomor pesanan ini.',
+                            ];
+                        }
+                        
+                        // STEP 5: Validasi bahwa nomor undian yang diinput VALID 
+                        // (ada di kolom I, J, K, atau L untuk baris ini)
+                        $validUndianCodes = [];
+                        $undianColumns = [8, 9, 10, 11]; // Kolom I, J, K, L (indeks 8, 9, 10, 11)
+                        
+                        foreach ($undianColumns as $colIndex) {
+                            if (isset($matchingCells[$colIndex]) && !empty(trim($matchingCells[$colIndex]))) {
+                                $validUndianCodes[] = strtoupper(trim($matchingCells[$colIndex]));
+                            }
+                        }
+                        
+                        \Log::info('Nomor undian valid di spreadsheet untuk baris ini', [
+                            'order_number' => $orderNumber,
+                            'valid_codes' => $validUndianCodes,
+                            'input_code' => $undianCode
+                        ]);
+                        
+                        // Cek apakah undian_code yang di-input ada di list valid codes
+                        if (!in_array(strtoupper($undianCode), $validUndianCodes)) {
+                            \Log::warning('Nomor undian tidak valid untuk nomor pesanan ini', [
+                                'order_number' => $orderNumber,
+                                'undian_code' => $undianCode,
+                                'valid_codes' => $validUndianCodes
+                            ]);
+                            
+                            return [
+                                'success' => false,
+                                'message' => 'Nomor undian tidak sesuai dengan nomor pesanan. Silakan periksa kembali.',
+                            ];
+                        }
+                        
+                        // STEP 6: Log informasi kupon yang tersisa
+                        $sisaKupon = $jumlahKuponValue - $redeemCount - 1; // -1 karena ini akan di-redeem
+                        \Log::info('Validasi sukses - Kupon dapat digunakan', [
+                            'order_number' => $orderNumber,
+                            'undian_code' => $undianCode,
+                            'jumlah_kupon_total' => $jumlahKuponValue,
+                            'sudah_digunakan' => $redeemCount,
+                            'sisa_setelah_ini' => $sisaKupon
+                        ]);
                     }
                     
                     // MODIFIKASI: Tambahkan informasi kolom yang digunakan untuk menemukan nomor undian
