@@ -114,10 +114,12 @@
                                 <!-- Product Image -->
                                 <div class="relative aspect-square bg-gray-50 overflow-hidden">
                                     @if(!empty($productImages))
-                                        <img src="{{ $productImages[0] }}" 
-                                             alt="{{ $cleanProductName }}"
-                                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                             loading="lazy">
+<a href="{{ route('products.show', $product->slug ?? '#') }}">
+    <img src="{{ $productImages[0] }}" 
+         alt="{{ $cleanProductName }}"
+         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+         loading="lazy">
+</a>
                                     @else
                                         <div class="w-full h-full flex items-center justify-center bg-gray-100">
                                             <i class="fas fa-shoe-prints text-4xl text-gray-300"></i>
