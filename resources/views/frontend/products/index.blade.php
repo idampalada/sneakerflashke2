@@ -106,25 +106,27 @@
                                 $totalStock = $product->total_stock ?? 0;
                             @endphp
                             
-                            <div class="product-card bg-white rounded-2xl overflow-hidden border border-gray-100 hover:shadow-lg transition-all duration-300 group h-full flex flex-col"
-                                 data-product-id="{{ $product->id ?? '' }}"
-                                 data-sku-parent="{{ $product->sku_parent ?? '' }}"
-                                 data-product-name="{{ $cleanProductName }}">
+                            <div class="product-card bg-white rounded-2xl overflow-hidden border border-gray-100 hover:shadow-lg transition-all duration-300 group h-full max-h-[540px] flex flex-col"
+
+     data-product-id="{{ $product->id ?? '' }}"
+     data-sku-parent="{{ $product->sku_parent ?? '' }}"
+     data-product-name="{{ $cleanProductName }}">
+
                                 
                                 <!-- Product Image -->
-                                <div class="relative aspect-square bg-gray-50 overflow-hidden">
-                                    @if(!empty($productImages))
-<a href="{{ route('products.show', $product->slug ?? '#') }}">
-    <img src="{{ $productImages[0] }}" 
-         alt="{{ $cleanProductName }}"
-         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-         loading="lazy">
-</a>
-                                    @else
-                                        <div class="w-full h-full flex items-center justify-center bg-gray-100">
-                                            <i class="fas fa-shoe-prints text-4xl text-gray-300"></i>
-                                        </div>
-                                    @endif
+                                <div class="relative bg-gray-50 overflow-hidden flex items-center justify-center h-[260px] md:h-[300px]">
+    @if(!empty($productImages))
+        <a href="{{ route('products.show', $product->slug ?? '#') }}">
+            <img src="{{ $productImages[0] }}" 
+                 alt="{{ $cleanProductName }}"
+                 class="max-w-full max-h-full object-contain p-2 transition-transform duration-300 group-hover:scale-105"
+                 loading="lazy">
+        </a>
+    @else
+        <div class="w-full h-full flex items-center justify-center bg-gray-100">
+            <i class="fas fa-shoe-prints text-4xl text-gray-300"></i>
+        </div>
+    @endif
                                     
                                     <!-- Product Badges -->
                                     <div class="absolute top-3 left-3 flex flex-col gap-2">
