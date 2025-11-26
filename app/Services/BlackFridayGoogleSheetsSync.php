@@ -204,7 +204,7 @@ class BlackFridayGoogleSheetsSync
             }
         }
         
-        // ⭐ IMPORTANT: Always set product_type as BLACKFRIDAY and category_id
+        // ⭐ FIXED: Match exact database schema from your screenshot
         $productData = [
             'product_type' => 'BLACKFRIDAY',  // FIXED: Always BLACKFRIDAY
             'category_id' => $this->getBlackFridayCategoryId(),  // Get or create Black Friday category
@@ -213,17 +213,19 @@ class BlackFridayGoogleSheetsSync
             'name' => $this->sanitizeString($record['name']),
             'description' => $this->sanitizeString($record['description'] ?? ''),
             'price' => $this->sanitizeFloat($record['sale_price'] ?? $record['price'] ?? 0),
+            'sale_price' => $this->sanitizeFloat($record['sale_price'] ?? 0), 
             'original_price' => $this->sanitizeFloat($record['price'] ?? 0),
             'sku' => $this->sanitizeString($record['sku']),
             'sku_parent' => $this->sanitizeString($record['sku_parent'] ?? ''),
             'stock_quantity' => $this->sanitizeInt($record['stock_quantity'] ?? 1),
+            'min_stock_level' => $this->sanitizeInt($record['min_stock_level'] ?? 5),
+            'weight' => $this->sanitizeFloat($record['weight'] ?? 500), // Default 500g
             'is_active' => true,
             'is_featured' => $this->sanitizeBool($record['is_featured'] ?? 'false'),
-            'is_sale' => true,  // Mark as sale
             'is_featured_sale' => $this->sanitizeBool($record['is_featured'] ?? 'false')
         ];
         
-        // Handle image URLs
+        // Handle image URLs - store as JSON array
         $imageUrls = [];
         for ($i = 1; $i <= 5; $i++) {
             $imageKey = "images_$i";
@@ -231,32 +233,32 @@ class BlackFridayGoogleSheetsSync
                 $imageUrls[] = trim($record[$imageKey]);
             }
         }
-        $productData['images'] = $imageUrls;
         
-        // Set featured image
+        // Store images as JSON (as per database schema)
         if (!empty($imageUrls)) {
+            $productData['images'] = json_encode($imageUrls);
+            // Set main image for featured_image field
             $productData['featured_image'] = $imageUrls[0];
         }
         
-        // Handle size - create size variant
+        // ⭐ FIXED: Handle size properly using available_sizes JSON field
         $size = $this->sanitizeString($record['available_sizes'] ?? '');
         if (!empty($size)) {
-            $productData['size_variants'] = [
-                [
-                    'id' => $productData['sku'],
-                    'size' => $size,
-                    'sku' => $productData['sku'],
-                    'stock' => $productData['stock_quantity'],
-                    'price' => $productData['price'],
-                    'original_price' => $productData['original_price']
-                ]
-            ];
-            $productData['total_stock'] = $productData['stock_quantity'];
+            // Store as JSON array in available_sizes column
+            $productData['available_sizes'] = json_encode([$size]);
+            
+            // For specifications JSON field
+            $productData['specifications'] = json_encode([
+                'size' => $size,
+                'type' => 'BLACKFRIDAY'
+            ]);
         }
         
-        // Calculate sale price
-        if ($productData['original_price'] > 0 && $productData['price'] > 0) {
-            $productData['sale_price'] = $productData['price'];
+        // Handle available_colors as JSON
+        if (!empty($record['available_colors'] ?? '')) {
+            $colors = explode(',', $record['available_colors']);
+            $colors = array_map('trim', $colors);
+            $productData['available_colors'] = json_encode($colors);
         }
         
         // Generate unique slug
@@ -276,7 +278,8 @@ class BlackFridayGoogleSheetsSync
             'sku' => $productData['sku'],
             'name' => $productData['name'],
             'product_type' => $productData['product_type'],
-            'category_id' => $productData['category_id']
+            'category_id' => $productData['category_id'],
+            'available_sizes' => $productData['available_sizes'] ?? null
         ]);
         
         // Update or create in products table

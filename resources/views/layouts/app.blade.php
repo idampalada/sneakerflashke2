@@ -352,6 +352,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <!-- Menu tanpa dropdown -->
         <a href="/products?category=accessories" class="mobile-menu-item">ACCESSORIES</a>
         <a href="/products?sale=true" class="mobile-menu-item special">SALE</a>
+        <a href="{{ route('black-friday.index') }}" class="mobile-menu-item special">BLACK FRIDAY</a>
         
         @auth
             <!-- My Account Section -->
@@ -841,8 +842,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     </a>
                 </div>
                 <div class="nav-item-container">
-    <a href="{{ route('black-friday.index') }}" class="nav-simple-link black-friday-menu">
-        🖤 BLACK FRIDAY
+    <a href="{{ route('black-friday.index') }}" class="nav-simple-link special">
+        BLACK FRIDAY
     </a>
 </div>
             </div>
@@ -943,6 +944,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </a>
             <a href="/products?sale=true" class="px-4 py-2 text-red-600 font-bold text-sm whitespace-nowrap hover:bg-red-50 transition-colors">
                 SALE
+            </a>
+                        <a href="{{ route('black-friday.index') }}" class="px-4 py-2 text-red-600 font-bold text-sm whitespace-nowrap hover:bg-red-50 transition-colors">
+                BLACK FRIDAY
             </a>
         </div>
     </div>
