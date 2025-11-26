@@ -573,3 +573,12 @@ Route::prefix('api/black-friday')->name('api.black-friday.')->group(function() {
 
 // Black Friday Cart Integration Routes
 Route::post('/cart/add-black-friday/{product:slug}', [\App\Http\Controllers\Frontend\CartController::class, 'addBlackFridayProduct'])->name('cart.add-black-friday');
+
+// Apple Authentication Routes (placeholder implementation)
+Route::get('/auth/apple', function() {
+    return redirect()->route('login')->with('info', 'Apple authentication will be available soon.');
+})->name('auth.apple');
+
+Route::get('/auth/apple/callback', function() {
+    return redirect()->route('login')->with('info', 'Apple authentication callback');
+})->name('auth.apple.callback');

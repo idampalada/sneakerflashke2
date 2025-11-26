@@ -2,59 +2,102 @@
 
 namespace App\Services;
 
-use App\Models\Product;  // CHANGE: Import Product instead of BlackFridayProduct
+use App\Models\Product;
+use App\Models\Category;
+use Exception;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Exception;
 
 class BlackFridayGoogleSheetsSync
 {
-    protected $sheetUrl;
+    protected $spreadsheetId = '1TJi2-UpmvtnjXWfGG7htw-fLKW-eRI8ERzuJsR-5kcg';
+    protected $sheetName = 'data_blackfriday';
+    protected $blackFridayCategoryId = null;
     
-    public function __construct()
+    /**
+     * Get or create Black Friday category
+     */
+    protected function getBlackFridayCategoryId()
     {
-        $this->sheetUrl = 'https://docs.google.com/spreadsheets/d/1TJi2-UpmvtnjXWfGG7htw-fLKW-eRI8ERzuJsR-5kcg/export?format=csv&gid=582214489';
+        if ($this->blackFridayCategoryId) {
+            return $this->blackFridayCategoryId;
+        }
+        
+        // Try to find existing Black Friday category
+        $category = Category::where('slug', 'black-friday')
+            ->orWhere('name', 'Black Friday')
+            ->first();
+        
+        if (!$category) {
+            // Create Black Friday category if it doesn't exist
+            $category = Category::create([
+                'name' => 'Black Friday',
+                'slug' => 'black-friday',
+                'description' => 'Black Friday Special Deals',
+                'is_active' => true,
+                'sort_order' => 99,
+                'icon' => '🖤',
+                'meta_title' => 'Black Friday Deals',
+                'meta_description' => 'Special Black Friday deals and discounts'
+            ]);
+            
+            Log::info('🖤 Created Black Friday category', ['id' => $category->id]);
+        }
+        
+        $this->blackFridayCategoryId = $category->id;
+        return $category->id;
     }
-
+    
     public function syncFromGoogleSheets()
     {
         try {
+            $gid = '582214489'; // data_blackfriday sheet GID
+            $exportUrl = "https://docs.google.com/spreadsheets/d/{$this->spreadsheetId}/export?format=csv&gid={$gid}";
+            
             Log::info('🖤 Starting Black Friday sync to Products table', [
-                'url' => $this->sheetUrl,
-                'timestamp' => now()
+                'url' => $exportUrl,
+                'timestamp' => now()->toIso8601String()
             ]);
             
-            $response = Http::timeout(30)->get($this->sheetUrl);
+            // Fetch CSV data
+            $response = Http::get($exportUrl);
             
             if (!$response->successful()) {
-                throw new Exception("Failed to fetch data from Google Sheets. Status: {$response->status()}");
+                throw new Exception("Failed to fetch spreadsheet data: " . $response->status());
             }
-
+            
             $csvData = $response->body();
             
             if (empty($csvData)) {
-                throw new Exception('Empty response from Google Sheets');
+                throw new Exception("No data received from spreadsheet");
             }
             
+            // Parse CSV
             $records = $this->parseCSV($csvData);
             
-            if (empty($records)) {
-                throw new Exception('No data records found after parsing');
+            if (count($records) < 2) {
+                throw new Exception("No data found in spreadsheet");
             }
             
-            $header = array_shift($records);
-            
+            $header = $records[0];
             Log::info('🖤 CSV Header found', ['header' => $header]);
             
             $syncCount = 0;
             $errorCount = 0;
             $errors = [];
             
-            foreach ($records as $lineNumber => $record) {
-                if (empty($record) || count($record) < 10) continue;
-                
+            // Process each row starting from row 2 (skip header)
+            for ($lineNumber = 1; $lineNumber < count($records); $lineNumber++) {
                 try {
+                    $record = $records[$lineNumber];
+                    
+                    // Skip empty rows
+                    if (empty(array_filter($record))) {
+                        continue;
+                    }
+                    
+                    // Check if this row has product data
                     if ($this->isProductDataRow($record, $header)) {
                         $recordData = array_combine($header, $record);
                         
@@ -161,9 +204,10 @@ class BlackFridayGoogleSheetsSync
             }
         }
         
-        // ⭐ IMPORTANT: Always set product_type as BLACKFRIDAY
+        // ⭐ IMPORTANT: Always set product_type as BLACKFRIDAY and category_id
         $productData = [
             'product_type' => 'BLACKFRIDAY',  // FIXED: Always BLACKFRIDAY
+            'category_id' => $this->getBlackFridayCategoryId(),  // Get or create Black Friday category
             'brand' => $this->sanitizeString($record['brand']),
             'related_product' => $this->sanitizeString($record['related_product'] ?? ''),
             'name' => $this->sanitizeString($record['name']),
@@ -176,6 +220,7 @@ class BlackFridayGoogleSheetsSync
             'is_active' => true,
             'is_featured' => $this->sanitizeBool($record['is_featured'] ?? 'false'),
             'is_sale' => true,  // Mark as sale
+            'is_featured_sale' => $this->sanitizeBool($record['is_featured'] ?? 'false')
         ];
         
         // Handle image URLs
@@ -230,7 +275,8 @@ class BlackFridayGoogleSheetsSync
             'line' => $lineNumber,
             'sku' => $productData['sku'],
             'name' => $productData['name'],
-            'product_type' => $productData['product_type']
+            'product_type' => $productData['product_type'],
+            'category_id' => $productData['category_id']
         ]);
         
         // Update or create in products table
