@@ -699,4 +699,278 @@ public function add(Request $request, $productId = null)
     {
         return $cartItems->sum('total');
     }
+    public function addBlackFridayProduct(Request $request, BlackFridayProduct $product)
+    {
+        // Validate that the product is still on sale
+        if (!$product->is_sale_active || !$product->is_in_stock) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This product is no longer available for sale.',
+            ], 400);
+        }
+
+        $request->validate([
+            'size' => 'nullable|string',
+            'color' => 'nullable|string',
+            'quantity' => 'required|integer|min:1|max:10',
+        ]);
+
+        $size = $request->input('size');
+        $color = $request->input('color');
+        $quantity = $request->input('quantity', 1);
+
+        // Validate size if provided
+        if ($size && !$product->hasSize($size)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Selected size is not available for this product.',
+            ], 400);
+        }
+
+        // Validate color if provided
+        if ($color && !$product->hasColor($color)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Selected color is not available for this product.',
+            ], 400);
+        }
+
+        // Check stock availability
+        if ($quantity > $product->stock_quantity) {
+            return response()->json([
+                'success' => false,
+                'message' => "Only {$product->stock_quantity} items available in stock.",
+            ], 400);
+        }
+
+        // Get current cart
+        $cart = session()->get('cart', []);
+
+        // Create unique cart key
+        $cartKey = $product->id . '_' . ($size ?? 'no_size') . '_' . ($color ?? 'no_color') . '_blackfriday';
+
+        // Check if item already exists in cart
+        if (isset($cart[$cartKey])) {
+            $newQuantity = $cart[$cartKey]['quantity'] + $quantity;
+            
+            if ($newQuantity > $product->stock_quantity) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Cannot add more items. Maximum available: {$product->stock_quantity}",
+                ], 400);
+            }
+            
+            $cart[$cartKey]['quantity'] = $newQuantity;
+        } else {
+            // Add new item to cart
+            $cart[$cartKey] = [
+                'id' => $product->id,
+                'name' => $product->name,
+                'brand' => $product->brand,
+                'price' => $product->price,
+                'original_price' => $product->original_price,
+                'discount_percentage' => $product->calculated_discount_percentage,
+                'quantity' => $quantity,
+                'size' => $size,
+                'color' => $color,
+                'image' => $product->first_image,
+                'sku' => $product->sku,
+                'sku_parent' => $product->sku_parent,
+                'slug' => $product->slug,
+                'product_type' => 'black_friday', // Mark as Black Friday product
+                'sale_end_date' => $product->sale_end_date?->toISOString(),
+            ];
+        }
+
+        // Update session
+        session()->put('cart', $cart);
+
+        // Get updated cart count
+        $cartCount = array_sum(array_column($cart, 'quantity'));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Product added to cart successfully!',
+            'cart_count' => $cartCount,
+            'cart_total' => $this->calculateCartTotal($cart),
+            'product' => [
+                'name' => $product->name,
+                'price' => $product->formatted_price,
+                'discount' => $product->calculated_discount_percentage > 0 ? $product->calculated_discount_percentage . '% OFF' : null,
+            ],
+        ]);
+    }
+    public function updateCartItem(Request $request, $cartKey)
+    {
+        $cart = session()->get('cart', []);
+        
+        if (!isset($cart[$cartKey])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Item not found in cart.',
+            ], 404);
+        }
+
+        $cartItem = $cart[$cartKey];
+        $newQuantity = $request->input('quantity', 1);
+
+        // If it's a Black Friday product, verify it's still available
+        if ($cartItem['product_type'] === 'black_friday') {
+            $product = BlackFridayProduct::find($cartItem['id']);
+            
+            if (!$product || !$product->is_sale_active) {
+                // Remove expired item from cart
+                unset($cart[$cartKey]);
+                session()->put('cart', $cart);
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This Black Friday deal has expired and was removed from your cart.',
+                    'expired' => true,
+                ], 410);
+            }
+
+            // Check stock
+            if ($newQuantity > $product->stock_quantity) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Only {$product->stock_quantity} items available.",
+                ], 400);
+            }
+
+            // Update price if it changed
+            $cart[$cartKey]['price'] = $product->price;
+            $cart[$cartKey]['original_price'] = $product->original_price;
+            $cart[$cartKey]['discount_percentage'] = $product->calculated_discount_percentage;
+        }
+
+        // Update quantity
+        $cart[$cartKey]['quantity'] = $newQuantity;
+        session()->put('cart', $cart);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cart updated successfully!',
+            'cart_total' => $this->calculateCartTotal($cart),
+            'item_total' => number_format($cart[$cartKey]['price'] * $newQuantity, 0, ',', '.'),
+        ]);
+    }
+    public function validateCartForCheckout()
+    {
+        $cart = session()->get('cart', []);
+        $errors = [];
+        $updatedCart = $cart;
+
+        foreach ($cart as $cartKey => $cartItem) {
+            if ($cartItem['product_type'] === 'black_friday') {
+                $product = BlackFridayProduct::find($cartItem['id']);
+                
+                // Check if product still exists and is on sale
+                if (!$product || !$product->is_sale_active) {
+                    unset($updatedCart[$cartKey]);
+                    $errors[] = "'{$cartItem['name']}' is no longer available and was removed from your cart.";
+                    continue;
+                }
+
+                // Check stock availability
+                if ($cartItem['quantity'] > $product->stock_quantity) {
+                    if ($product->stock_quantity > 0) {
+                        $updatedCart[$cartKey]['quantity'] = $product->stock_quantity;
+                        $errors[] = "'{$product->name}' quantity was reduced to {$product->stock_quantity} (maximum available).";
+                    } else {
+                        unset($updatedCart[$cartKey]);
+                        $errors[] = "'{$product->name}' is out of stock and was removed from your cart.";
+                        continue;
+                    }
+                }
+
+                // Update prices if changed
+                if ($cartItem['price'] != $product->price) {
+                    $updatedCart[$cartKey]['price'] = $product->price;
+                    $updatedCart[$cartKey]['original_price'] = $product->original_price;
+                    $updatedCart[$cartKey]['discount_percentage'] = $product->calculated_discount_percentage;
+                    $errors[] = "Price for '{$product->name}' has been updated.";
+                }
+            }
+        }
+
+        // Update cart if there were changes
+        if ($updatedCart !== $cart) {
+            session()->put('cart', $updatedCart);
+        }
+
+        return [
+            'valid' => empty($errors),
+            'errors' => $errors,
+            'cart' => $updatedCart,
+        ];
+    }
+    private function calculateCartTotal($cart)
+    {
+        $total = 0;
+        
+        foreach ($cart as $item) {
+            $total += $item['price'] * $item['quantity'];
+        }
+        
+        return number_format($total, 0, ',', '.');
+    }
+
+    public function getCartSavings()
+    {
+        $cart = session()->get('cart', []);
+        $totalSavings = 0;
+        $originalTotal = 0;
+        $discountedTotal = 0;
+
+        foreach ($cart as $item) {
+            $itemTotal = $item['quantity'] * $item['price'];
+            $discountedTotal += $itemTotal;
+
+            if (isset($item['original_price']) && $item['original_price'] > 0) {
+                $originalItemTotal = $item['quantity'] * $item['original_price'];
+                $originalTotal += $originalItemTotal;
+                $totalSavings += ($originalItemTotal - $itemTotal);
+            } else {
+                $originalTotal += $itemTotal;
+            }
+        }
+
+        return [
+            'total_savings' => $totalSavings,
+            'original_total' => $originalTotal,
+            'discounted_total' => $discountedTotal,
+            'savings_percentage' => $originalTotal > 0 ? round(($totalSavings / $originalTotal) * 100) : 0,
+        ];
+    }
+    public function cleanExpiredBlackFridayProducts()
+    {
+        $cart = session()->get('cart', []);
+        $cleanedCart = [];
+        $removedItems = [];
+
+        foreach ($cart as $cartKey => $cartItem) {
+            if ($cartItem['product_type'] === 'black_friday') {
+                $product = BlackFridayProduct::find($cartItem['id']);
+                
+                if ($product && $product->is_sale_active) {
+                    $cleanedCart[$cartKey] = $cartItem;
+                } else {
+                    $removedItems[] = $cartItem['name'];
+                }
+            } else {
+                $cleanedCart[$cartKey] = $cartItem;
+            }
+        }
+
+        if (!empty($removedItems)) {
+            session()->put('cart', $cleanedCart);
+            session()->flash('cart_cleaned', 'Some Black Friday deals have expired and were removed from your cart: ' . implode(', ', $removedItems));
+        }
+
+        return $cleanedCart;
+    }
+
+
+
 }

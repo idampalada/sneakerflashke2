@@ -1392,3 +1392,40 @@ img, svg, video {
     max-width: 100% !important;
     height: auto !important;
 }
+
+/* Black Friday Menu Styling */
+.black-friday-menu {
+    background: linear-gradient(135deg, #000000, #dc2626) !important;
+    color: white !important;
+    border-radius: 6px !important;
+    padding: 8px 16px !important;
+    font-weight: bold !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    box-shadow: 0 4px 15px rgba(220, 38, 38, 0.3);
+    transition: all 0.3s ease;
+    text-decoration: none !important;
+    margin: 0 4px;
+}
+
+.black-friday-menu:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 20px rgba(220, 38, 38, 0.4) !important;
+    color: #ffd700 !important;
+    text-decoration: none !important;
+}
+
+.black-friday-menu {
+    animation: pulse-glow 2s infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% { 
+        opacity: 1; 
+        text-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+    }
+    50% { 
+        opacity: 0.9; 
+        text-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
+    }
+}

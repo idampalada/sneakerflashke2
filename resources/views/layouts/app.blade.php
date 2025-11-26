@@ -840,6 +840,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         SALE
                     </a>
                 </div>
+                <div class="nav-item-container">
+    <a href="{{ route('black-friday.index') }}" class="nav-simple-link black-friday-menu">
+        🖤 BLACK FRIDAY
+    </a>
+</div>
             </div>
         </div>
     </header>

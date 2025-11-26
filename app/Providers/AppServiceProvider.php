@@ -4,7 +4,9 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\View;
 use App\Models\Order;
+use App\Models\BlackFridayProduct;
 use App\Observers\OrderObserver;
 use App\Services\PromoSpreadsheetService;
 
@@ -51,6 +53,49 @@ class AppServiceProvider extends ServiceProvider
 
         // Register Order Observer untuk auto-sync user spending
         Order::observe(OrderObserver::class);
+
+        // ✅ TAMBAHAN BARU: Share Black Friday data dengan semua views
+        if (class_exists(BlackFridayProduct::class)) {
+            View::composer('*', function ($view) {
+                try {
+                    // Check if there are active Black Friday products
+                    $blackFridayActive = BlackFridayProduct::where('is_active', true)
+                        ->where(function ($query) {
+                            $now = now();
+                            $query->where('sale_start_date', '<=', $now)
+                                  ->orWhereNull('sale_start_date');
+                        })
+                        ->where(function ($query) {
+                            $now = now();
+                            $query->where('sale_end_date', '>=', $now)
+                                  ->orWhereNull('sale_end_date');
+                        })
+                        ->exists();
+
+                    // Get Black Friday stats for navigation
+                    $blackFridayStats = [
+                        'active' => $blackFridayActive,
+                        'total_products' => BlackFridayProduct::where('is_active', true)->count(),
+                        'flash_sale_count' => BlackFridayProduct::where('is_flash_sale', true)
+                            ->where('is_active', true)
+                            ->count(),
+                        'max_discount' => BlackFridayProduct::where('is_active', true)
+                            ->whereNotNull('discount_percentage')
+                            ->max('discount_percentage') ?? 0,
+                    ];
+
+                    $view->with('blackFridayStats', $blackFridayStats);
+                } catch (\Exception $e) {
+                    // Jika tabel belum ada atau ada error, set default values
+                    $view->with('blackFridayStats', [
+                        'active' => false,
+                        'total_products' => 0,
+                        'flash_sale_count' => 0,
+                        'max_discount' => 0,
+                    ]);
+                }
+            });
+        }
 
         \Filament\Facades\Filament::serving(function () {
             //
