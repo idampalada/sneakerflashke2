@@ -8,6 +8,7 @@ use Exception;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Support\Collection;
 
 class BlackFridayGoogleSheetsSync
 {
@@ -49,6 +50,150 @@ class BlackFridayGoogleSheetsSync
         return $category->id;
     }
     
+    /**
+     * ⭐ SMART SYNC: CREATE/UPDATE/DELETE Black Friday products
+     */
+    public function smartSync()
+    {
+        try {
+            Log::info('🧠 Starting SMART SYNC for Black Friday products');
+            
+            // 1. Get all SKUs from Google Sheets
+            $spreadsheetSkus = $this->getSkusFromSpreadsheet();
+            
+            // 2. Get all existing Black Friday SKUs from database
+            $existingSkus = Product::where('product_type', 'BLACKFRIDAY')
+                ->pluck('sku')
+                ->toArray();
+            
+            // 3. Perform regular sync (CREATE/UPDATE)
+            $syncResult = $this->syncFromGoogleSheets();
+            
+            if (!$syncResult['success']) {
+                throw new Exception($syncResult['error']);
+            }
+            
+            // 4. DELETE products that are NOT in spreadsheet anymore
+            $skusToDelete = array_diff($existingSkus, $spreadsheetSkus);
+            $deletedCount = 0;
+            
+            if (!empty($skusToDelete)) {
+                Log::info('🗑️ Deleting Black Friday products not in spreadsheet', [
+                    'skus_to_delete' => $skusToDelete,
+                    'count' => count($skusToDelete)
+                ]);
+                
+                foreach ($skusToDelete as $sku) {
+                    $product = Product::where('sku', $sku)
+                        ->where('product_type', 'BLACKFRIDAY')
+                        ->first();
+                    
+                    if ($product) {
+                        Log::info("🗑️ Deleting Black Friday product: {$product->name} (SKU: {$sku})");
+                        $product->delete();
+                        $deletedCount++;
+                    }
+                }
+            }
+            
+            // 5. Calculate final stats
+            $finalResult = [
+                'success' => true,
+                'synced' => $syncResult['synced'],
+                'created' => $this->calculateCreatedProducts($existingSkus, $spreadsheetSkus),
+                'updated' => $syncResult['synced'] - $this->calculateCreatedProducts($existingSkus, $spreadsheetSkus),
+                'deleted' => $deletedCount,
+                'errors' => $syncResult['errors'],
+                'total_processed' => $syncResult['total_processed'],
+                'spreadsheet_skus' => count($spreadsheetSkus),
+                'existing_skus_before' => count($existingSkus),
+                'final_count' => Product::where('product_type', 'BLACKFRIDAY')->count()
+            ];
+            
+            Log::info('🧠 SMART SYNC completed successfully', $finalResult);
+            
+            return $finalResult;
+            
+        } catch (Exception $e) {
+            Log::error('🧠 SMART SYNC failed', [
+                'error' => $e->getMessage()
+            ]);
+            
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+    
+    /**
+     * Get all SKUs from Google Sheets
+     */
+    protected function getSkusFromSpreadsheet()
+    {
+        try {
+            $gid = '582214489';
+            $exportUrl = "https://docs.google.com/spreadsheets/d/{$this->spreadsheetId}/export?format=csv&gid={$gid}";
+            
+            $response = Http::get($exportUrl);
+            
+            if (!$response->successful()) {
+                throw new Exception("Failed to fetch spreadsheet data: " . $response->status());
+            }
+            
+            $records = $this->parseCSV($response->body());
+            
+            if (count($records) < 2) {
+                return [];
+            }
+            
+            $header = $records[0];
+            $skus = [];
+            
+            for ($lineNumber = 1; $lineNumber < count($records); $lineNumber++) {
+                $record = $records[$lineNumber];
+                
+                if (empty(array_filter($record))) {
+                    continue;
+                }
+                
+                if ($this->isProductDataRow($record, $header)) {
+                    $recordData = array_combine($header, $record);
+                    $sku = $this->sanitizeString($recordData['sku'] ?? '');
+                    
+                    if (!empty($sku)) {
+                        $skus[] = $sku;
+                    }
+                }
+            }
+            
+            Log::info('📋 Retrieved SKUs from spreadsheet', [
+                'count' => count($skus),
+                'skus' => array_slice($skus, 0, 10) // Log first 10 for verification
+            ]);
+            
+            return $skus;
+            
+        } catch (Exception $e) {
+            Log::error('📋 Failed to get SKUs from spreadsheet', [
+                'error' => $e->getMessage()
+            ]);
+            throw $e;
+        }
+    }
+    
+    /**
+     * Calculate how many products were created (new SKUs)
+     */
+    protected function calculateCreatedProducts($existingSkus, $spreadsheetSkus)
+    {
+        $newSkus = array_diff($spreadsheetSkus, $existingSkus);
+        return count($newSkus);
+    }
+    
+    /**
+     * Regular sync method (CREATE/UPDATE only)
+     */
     public function syncFromGoogleSheets()
     {
         try {
@@ -130,7 +275,7 @@ class BlackFridayGoogleSheetsSync
                 'success' => true,
                 'synced' => $syncCount,
                 'errors' => $errorCount,
-                'total_processed' => count($records)
+                'total_processed' => count($records) - 1 // Exclude header
             ];
             
         } catch (Exception $e) {

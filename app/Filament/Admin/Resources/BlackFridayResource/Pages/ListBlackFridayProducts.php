@@ -16,12 +16,61 @@ class ListBlackFridayProducts extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            // Smart Sync dari Google Sheets ke Products table
+            // ⭐ SMART SYNC: CREATE/UPDATE/DELETE Black Friday products
             Actions\Action::make('smart_sync')
-                ->label('🖤 Smart Sync')
+                ->label('🧠 Smart Sync')
                 ->icon('heroicon-o-arrow-path')
                 ->color('success')
-                ->tooltip('Sync from data_blackfriday Google Sheets to Products table')
+                ->requiresConfirmation()
+                ->modalHeading('Smart Sync Black Friday Products')
+                ->modalDescription('This will intelligently sync products from Google Sheets: CREATE new products, UPDATE existing ones, and DELETE products that are no longer in the spreadsheet. Only BLACKFRIDAY products will be affected - other product types will remain untouched.')
+                ->modalSubmitActionLabel('Start Smart Sync')
+                ->tooltip('Sync from data_blackfriday Google Sheets: CREATE/UPDATE/DELETE')
+                ->action(function () {
+                    try {
+                        $syncService = new BlackFridayGoogleSheetsSync();
+                        
+                        // ⭐ USE SMART SYNC instead of regular sync
+                        $result = $syncService->smartSync();
+                        
+                        if ($result['success']) {
+                            $message = "Smart Sync completed successfully!\n\n";
+                            $message .= "📊 RESULTS:\n";
+                            $message .= "• Created: {$result['created']} new products\n";
+                            $message .= "• Updated: {$result['updated']} existing products\n";
+                            $message .= "• Deleted: {$result['deleted']} obsolete products\n";
+                            $message .= "• Total processed: {$result['synced']} products\n";
+                            $message .= "• Final count: {$result['final_count']} Black Friday products\n";
+                            
+                            if ($result['errors'] > 0) {
+                                $message .= "• Errors: {$result['errors']} (check logs)";
+                            }
+                            
+                            Notification::make()
+                                ->title('🧠 Smart Sync Success!')
+                                ->body($message)
+                                ->success()
+                                ->duration(8000)
+                                ->send();
+                        } else {
+                            throw new Exception($result['error']);
+                        }
+                    } catch (Exception $e) {
+                        Notification::make()
+                            ->title('🧠 Smart Sync Failed')
+                            ->body($e->getMessage())
+                            ->danger()
+                            ->duration(8000)
+                            ->send();
+                    }
+                }),
+
+            // ⭐ REGULAR SYNC: CREATE/UPDATE only (no delete)
+            Actions\Action::make('regular_sync')
+                ->label('🖤 Regular Sync')
+                ->icon('heroicon-o-cloud-arrow-down')
+                ->color('warning')
+                ->tooltip('Sync from Google Sheets: CREATE/UPDATE only (no delete)')
                 ->action(function () {
                     try {
                         $syncService = new BlackFridayGoogleSheetsSync();
@@ -29,7 +78,7 @@ class ListBlackFridayProducts extends ListRecords
                         
                         if ($result['success']) {
                             Notification::make()
-                                ->title('🖤 Black Friday Smart Sync Success!')
+                                ->title('🖤 Regular Sync Success!')
                                 ->body("Synced {$result['synced']} products to Products table" . 
                                       ($result['errors'] > 0 ? " with {$result['errors']} errors" : ""))
                                 ->success()
@@ -40,7 +89,7 @@ class ListBlackFridayProducts extends ListRecords
                         }
                     } catch (Exception $e) {
                         Notification::make()
-                            ->title('🖤 Smart Sync Failed')
+                            ->title('🖤 Regular Sync Failed')
                             ->body($e->getMessage())
                             ->danger()
                             ->duration(8000)
@@ -65,7 +114,18 @@ class ListBlackFridayProducts extends ListRecords
     {
         $totalProducts = $this->getModel()::where('product_type', 'BLACKFRIDAY')->count();
         $activeProducts = $this->getModel()::where('product_type', 'BLACKFRIDAY')->where('is_active', true)->count();
+        $onSaleProducts = $this->getModel()::where('product_type', 'BLACKFRIDAY')
+            ->whereNotNull('sale_price')
+            ->whereColumn('sale_price', '<', 'price')
+            ->count();
         
-        return "Total: {$totalProducts} | Active: {$activeProducts} | Source: Products table with BLACKFRIDAY type";
+        return "Total: {$totalProducts} | Active: {$activeProducts} | On Sale: {$onSaleProducts} | Source: data_blackfriday Google Sheets";
+    }
+    
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            // You can add widgets here for statistics if needed
+        ];
     }
 }
