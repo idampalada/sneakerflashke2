@@ -1,5 +1,5 @@
 {{-- File: resources/views/frontend/blackfriday/index.blade.php --}}
-{{-- Fixed to properly clean size display without backslashes --}}
+{{-- Fixed pricing display to match products page exactly --}}
 @extends('layouts.app')
 
 @section('title', 'Black Friday Deals - SneakerFlash')
@@ -20,17 +20,9 @@
 
     <div class="container mx-auto px-4 py-8">
         <div class="flex gap-8">
-            <!-- Filters Sidebar - Exactly same as Products -->
-            <aside id="filterSidebar" class="w-72 flex-shrink-0 hidden">
-                <div class="bg-white rounded-2xl p-6 border border-gray-100">
-                    <h3 class="font-semibold text-gray-900 mb-4">Filters</h3>
-                    <!-- Add your filter content here -->
-                </div>
-            </aside>
-
-            <!-- Products Grid - Exactly same as Products -->
+            <!-- Products Grid -->
             <main class="flex-1">
-                <!-- Sort Options & View Toggle - EXACTLY same as products -->
+                <!-- Sort Options & View Toggle -->
                 <div class="bg-white rounded-2xl p-6 mb-6 border border-gray-100">
                     <div class="flex justify-between items-center">
                         <div class="flex items-center space-x-4">
@@ -55,12 +47,12 @@
                     </div>
                 </div>
 
-                <!-- Products Grid - EXACTLY same structure as products -->
+                <!-- Products Grid -->
                 <div id="productsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     @if(isset($products) && $products->count() > 0)
                         @foreach($products as $product)
                             @php
-                                // EXACT same logic as products page
+                                // Clean product name
                                 $originalName = $product->name ?? 'Unknown Product';
                                 $skuParent = $product->sku_parent ?? '';
                                 
@@ -75,15 +67,15 @@
                                 $cleanProductName = preg_replace('/\s*-\s*[A-Z0-9.]+\s*$/i', '', $cleanProductName);
                                 $cleanProductName = trim($cleanProductName, ' -');
                                 
-                                // Safe data handling - EXACT same as products
-                                $productImages = [];
-                                if ($product->first_image) {
-                                    $productImages[] = $product->first_image;
-                                } else {
-                                    $productImages[] = asset('images/default-product.jpg');
-                                }
+                                // Get image
+                                $productImage = $product->first_image ?? asset('images/default-product.jpg');
                                 
-                                // Get size variants - EXACT same logic as products
+                                // ⭐ PRICING - Use controller calculated values for consistent display
+                                $finalPrice = $product->final_price ?? ($product->price ?? 0);
+                                $displayOriginalPrice = $product->display_original_price ?? null;
+                                $discountPercentage = $product->calculated_discount_percentage ?? 0;
+                                
+                                // Size variants
                                 $sizeVariants = [];
                                 if (!empty($product->sku_parent)) {
                                     $variants = \App\Models\Product::where('sku_parent', $product->sku_parent)
@@ -92,86 +84,56 @@
                                         ->get();
                                     
                                     foreach ($variants as $variant) {
-                                        $finalPrice = ($variant->sale_price && $variant->sale_price < $variant->price) 
-                                            ? $variant->sale_price 
-                                            : $variant->price;
-                                        
-                                        // ⭐ ULTRA FIXED: Get size from available_sizes JSON field and DEEPLY clean it
-                                        $size = 'Unknown';
                                         if ($variant->available_sizes) {
                                             $sizes = is_string($variant->available_sizes) 
                                                 ? json_decode($variant->available_sizes, true) 
                                                 : $variant->available_sizes;
                                             
-                                            if (is_array($sizes) && count($sizes) > 0) {
-                                                $rawSize = $sizes[0]; // Take first size
-                                                
-                                                // ⭐ ULTRA CLEAN: Remove ALL possible formatting issues
-                                                $size = (string) $rawSize;
-                                                $size = trim($size, '"\'');
-                                                $size = str_replace(['[', ']', '"', "'", '\\'], '', $size);
-                                                $size = preg_replace('/[\x00-\x1F\x7F]/', '', $size); // Remove control characters
-                                                $size = trim($size);
-                                                
-                                                // If still empty, use fallback
-                                                if (empty($size)) {
-                                                    $size = 'One Size';
+                                            if (is_array($sizes)) {
+                                                foreach ($sizes as $size) {
+                                                    // Ultra clean size
+                                                    $cleanSize = (string) $size;
+                                                    $cleanSize = trim($cleanSize, '"\'');
+                                                    $cleanSize = str_replace(['[', ']', '"', "'", '\\'], '', $cleanSize);
+                                                    $cleanSize = preg_replace('/[\x00-\x1F\x7F]/', '', $cleanSize);
+                                                    $cleanSize = trim($cleanSize);
+                                                    
+                                                    if (!empty($cleanSize)) {
+                                                        $sizeVariants[] = [
+                                                            'id' => $variant->id,
+                                                            'size' => $cleanSize,
+                                                            'stock' => $variant->stock_quantity ?? 0,
+                                                            'price' => $variant->sale_price ?: $variant->price,
+                                                            'original_price' => $variant->original_price ?? $variant->price,
+                                                            'sku' => $variant->sku
+                                                        ];
+                                                    }
                                                 }
                                             }
                                         }
-                                        
-                                        $sizeVariants[] = [
-                                            'id' => $variant->id,
-                                            'size' => $size,
-                                            'stock' => $variant->stock_quantity ?? 0,
-                                            'price' => $finalPrice,
-                                            'original_price' => $variant->original_price ?? $variant->price,
-                                            'sku' => $variant->sku
-                                        ];
                                     }
                                 }
                                 
                                 $hasMultipleSizes = count($sizeVariants) > 1;
-                                $productPrice = $product->price ?? 0;
-                                $salePrice = $product->sale_price ?? null;
-                                $finalPrice = ($salePrice && $salePrice < $productPrice) ? $salePrice : $productPrice;
-                                
-                                // Calculate total stock - EXACT same as products
-                                if ($hasMultipleSizes) {
-                                    $totalStock = collect($sizeVariants)->sum('stock');
-                                } else {
-                                    $totalStock = $product->stock_quantity ?? 0;
-                                }
-                                
-                                // Calculate discount percentage
-                                $discountPercentage = 0;
-                                if ($product->original_price && $product->original_price > $finalPrice) {
-                                    $discountPercentage = round((($product->original_price - $finalPrice) / $product->original_price) * 100);
-                                }
+                                $totalStock = $hasMultipleSizes ? collect($sizeVariants)->sum('stock') : ($product->stock_quantity ?? 0);
                             @endphp
                             
-                            {{-- EXACT same product card structure as products - NO BLACK FRIDAY BADGES --}}
+                            <!-- Product Card -->
                             <div class="product-card bg-white rounded-2xl overflow-hidden border border-gray-100 hover:shadow-lg transition-all duration-300 group h-full max-h-[540px] flex flex-col"
                                  data-product-id="{{ $product->id ?? '' }}"
                                  data-sku-parent="{{ $product->sku_parent ?? '' }}"
                                  data-product-name="{{ $cleanProductName }}">
 
-                                <!-- Product Image - EXACTLY same as products -->
+                                <!-- Product Image -->
                                 <div class="relative bg-gray-50 overflow-hidden flex items-center justify-center h-[260px] md:h-[300px]">
-                                    @if(!empty($productImages))
-                                        <a href="{{ route('black-friday.show', $product->slug ?? '#') }}">
-                                            <img src="{{ $productImages[0] }}" 
-                                                 alt="{{ $cleanProductName }}"
-                                                 class="max-w-full max-h-full object-contain p-2 transition-transform duration-300 group-hover:scale-105"
-                                                 loading="lazy">
-                                        </a>
-                                    @else
-                                        <div class="w-full h-full flex items-center justify-center bg-gray-100">
-                                            <i class="fas fa-shoe-prints text-4xl text-gray-300"></i>
-                                        </div>
-                                    @endif
+                                    <a href="{{ route('black-friday.show', $product->slug ?? '#') }}">
+                                        <img src="{{ $productImage }}" 
+                                             alt="{{ $cleanProductName }}"
+                                             class="max-w-full max-h-full object-contain p-2 transition-transform duration-300 group-hover:scale-105"
+                                             loading="lazy">
+                                    </a>
                                     
-                                    <!-- Product Badges - EXACTLY same as products (NO BLACK FRIDAY LABEL) -->
+                                    <!-- Product Badges -->
                                     <div class="absolute top-3 left-3 flex flex-col gap-2">
                                         @if($product->is_featured ?? false)
                                             <span class="bg-yellow-500 text-white text-xs px-2 py-1 rounded-full font-medium">
@@ -194,7 +156,7 @@
                                         @endif
                                     </div>
 
-                                    <!-- Wishlist Button - EXACTLY same as products -->
+                                    <!-- Wishlist Button -->
                                     <button class="wishlist-btn absolute top-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md hover:shadow-lg transition-all duration-200" 
                                             data-product-id="{{ $product->id ?? '' }}"
                                             data-product-name="{{ $cleanProductName }}">
@@ -202,7 +164,7 @@
                                     </button>
                                 </div>
                                 
-                                <!-- Product Info - EXACTLY same structure as products -->
+                                <!-- Product Info -->
                                 <div class="p-4 flex flex-col h-full">
                                     <div class="mb-2">
                                         <span class="text-xs text-gray-500 uppercase tracking-wide">
@@ -213,7 +175,7 @@
                                         </span>
                                     </div>
                                     
-                                    {{-- EXACT same title as products --}}
+                                    <!-- Product Title -->
                                     <h3 class="font-semibold text-gray-900 mb-3 text-sm leading-tight">
                                         <a href="{{ route('black-friday.show', $product->slug ?? '#') }}" 
                                            class="hover:text-blue-600 transition-colors">
@@ -221,7 +183,7 @@
                                         </a>
                                     </h3>
                                     
-                                    <!-- Available Sizes - EXACTLY same as products with ULTRA CLEAN display -->
+                                    <!-- Available Sizes -->
                                     @if($hasMultipleSizes)
                                         <div class="mb-3">
                                             <span class="text-xs text-gray-500 font-medium">Available Sizes:</span>
@@ -233,8 +195,8 @@
                                                         $variantId = $variant['id'] ?? '';
                                                         $sku = $variant['sku'] ?? '';
                                                         $isAvailable = $stock > 0;
-                                                        $variantPrice = $variant['price'] ?? $productPrice;
-                                                        $variantOriginalPrice = $variant['original_price'] ?? $productPrice;
+                                                        $variantPrice = $variant['price'] ?? $finalPrice;
+                                                        $variantOriginalPrice = $variant['original_price'] ?? $finalPrice;
                                                     @endphp
                                                     <span class="size-badge text-xs px-2 py-1 rounded border {{ $isAvailable ? 'text-gray-700 bg-gray-50 border-gray-200 hover:bg-blue-50 hover:border-blue-300' : 'text-gray-400 bg-gray-100 border-gray-200 line-through' }}" 
                                                           data-size="{{ $size }}" 
@@ -251,25 +213,27 @@
                                         </div>
                                     @endif
                                     
-                                    <!-- Price - EXACTLY same as products -->
                                     <div class="mb-4 price-display">
-                                        @if($salePrice && $salePrice < $productPrice)
-                                            <div class="flex items-center space-x-2">
-                                                <span class="text-lg font-bold text-red-600">
-                                                    Rp {{ number_format($salePrice, 0, ',', '.') }}
-                                                </span>
-                                                <span class="text-sm text-gray-400 line-through">
-                                                    Rp {{ number_format($productPrice, 0, ',', '.') }}
-                                                </span>
-                                            </div>
-                                        @else
-                                            <span class="text-lg font-bold text-gray-900">
-                                                Rp {{ number_format($finalPrice, 0, ',', '.') }}
-                                            </span>
-                                        @endif
-                                    </div>
+    @if($displayOriginalPrice && $displayOriginalPrice > $finalPrice)
+        {{-- Sale Price Display - RED price + strikethrough original (horizontal) --}}
+        <div class="flex items-baseline space-x-2">
+            <span class="text-lg font-bold text-red-600">
+                Rp {{ number_format($finalPrice, 0, ',', '.') }}
+            </span>
+            <span class="text-sm text-gray-500 line-through">
+                Rp {{ number_format($displayOriginalPrice, 0, ',', '.') }}
+            </span>
+        </div>
+    @else
+        {{-- Regular price - BLACK --}}
+        <span class="text-lg font-bold text-gray-900">
+            Rp {{ number_format($finalPrice, 0, ',', '.') }}
+        </span>
+    @endif
+</div>
+
                                     
-                                    <!-- Stock Status - EXACTLY same as products -->
+                                    <!-- Stock Status -->
                                     <div class="mb-3 stock-display">
                                         @if($totalStock > 0)
                                             <span class="text-xs text-green-600 font-medium">
@@ -284,7 +248,7 @@
                                         @endif
                                     </div>
                                     
-                                    <!-- Action Buttons - EXACTLY same as products -->
+                                    <!-- Action Buttons -->
                                     <div class="mt-auto">
                                         <div class="flex gap-2">
                                             @if($totalStock > 0)
@@ -295,7 +259,7 @@
                                                             data-sku-parent="{{ $product->sku_parent ?? '' }}"
                                                             data-product-name="{{ $cleanProductName }}"
                                                             data-price="{{ $finalPrice }}"
-                                                            data-original-price="{{ $productPrice }}">
+                                                            data-original-price="{{ $displayOriginalPrice ?? $finalPrice }}">
                                                         <i class="fas fa-shopping-cart mr-1"></i>
                                                         Select Size
                                                     </button>
@@ -339,7 +303,7 @@
                     @endif
                 </div>
 
-                <!-- Pagination - EXACTLY same as products -->
+                <!-- Pagination -->
                 @if(isset($products) && $products->hasPages())
                 <div class="mt-8">
                     <div class="flex items-center justify-between">
@@ -376,12 +340,9 @@
         </div>
     </div>
 
-    <!-- Enhanced Size Selection Modal - EXACTLY same as products -->
+    <!-- Size Selection Modal -->
     <div id="sizeSelectionModal" class="fixed inset-0 z-50 hidden">
-        <!-- Background Overlay -->
         <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity"></div>
-        
-        <!-- Modal Container -->
         <div class="fixed inset-0 flex items-center justify-center p-4">
             <div class="relative bg-white rounded-2xl max-w-lg w-full mx-auto shadow-2xl transform transition-all">
                 <!-- Modal Header -->
@@ -401,14 +362,12 @@
                 
                 <!-- Modal Body -->
                 <div class="p-6">
-                    <!-- Size Options Grid -->
                     <div class="mb-6">
                         <div id="sizeOptionsContainer" class="grid grid-cols-4 gap-3">
-                            <!-- Size options will be populated here -->
+                            <!-- Size options populated here -->
                         </div>
                     </div>
                     
-                    <!-- Selected Size Info -->
                     <div class="mb-6 hidden" id="selectedSizeInfo">
                         <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
                             <div class="flex items-center justify-between mb-2">
@@ -426,7 +385,6 @@
                         </div>
                     </div>
                     
-                    <!-- Add to Cart Form -->
                     <form id="sizeAddToCartForm" action="{{ route('cart.add') }}" method="POST" class="hidden">
                         @csrf
                         <input type="hidden" name="product_id" id="selectedProductId">
@@ -440,7 +398,6 @@
                     </form>
                 </div>
                 
-                <!-- Modal Footer -->
                 <div class="bg-gray-50 px-6 py-3 rounded-b-2xl">
                     <p class="text-xs text-center text-gray-500">
                         <i class="fas fa-info-circle mr-1"></i>
@@ -474,47 +431,7 @@
 
 @push('styles')
 <style>
-    /* EXACT SAME CSS as products page */
-    
-    /* Category Pills */
-    .category-pill {
-        display: inline-flex;
-        align-items: center;
-        padding: 8px 16px;
-        background: #f8f9fa;
-        border: 1px solid #e9ecef;
-        border-radius: 8px;
-        text-decoration: none;
-        font-size: 14px;
-        font-weight: 500;
-        color: #6c757d;
-        transition: all 0.2s ease;
-        white-space: nowrap;
-    }
-
-    .category-pill:hover {
-        background: #e9ecef;
-        color: #495057;
-        border-color: #adb5bd;
-    }
-
-    .category-pill.active {
-        background: #000000;
-        color: #ffffff;
-        border-color: #000000;
-    }
-
-    .category-pill.special {
-        color: #ff4757;
-        border-color: #ff4757;
-    }
-
-    .category-pill.special.active {
-        background: #ff4757;
-        color: #ffffff;
-    }
-
-    /* Size Badge Styles */
+    /* Size badge and pricing styles */
     .size-badge {
         cursor: pointer;
         transition: all 0.2s ease;
@@ -524,7 +441,7 @@
         cursor: not-allowed;
     }
 
-    /* Enhanced Size Selection Modal Styles */
+    /* Modal styles */
     #sizeSelectionModal {
         backdrop-filter: blur(8px);
     }
@@ -544,219 +461,56 @@
         }
     }
 
-    /* Size Options Connected with Separator */
-    #sizeOptionsContainer {
-        display: flex;
-        justify-content: center;
-        max-width: 300px;
-        margin: 0 auto;
-        border: 2px solid #e5e7eb;
-        border-radius: 8px;
-        overflow: hidden;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
     .size-option {
-        flex: 1;
-        padding: 16px 12px;
-        text-align: center;
-        cursor: pointer;
         transition: all 0.2s ease;
-        background: white;
-        min-height: 60px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        position: relative;
-        border: none;
-        border-radius: 0;
-    }
-
-    /* Separator line between options */
-    .size-option:not(:last-child)::after {
-        content: '';
-        position: absolute;
-        right: 0;
-        top: 10%;
-        bottom: 10%;
-        width: 2px;
-        background-color: #d1d5db;
-        transition: background-color 0.2s ease;
+        min-width: 60px;
     }
 
     .size-option:hover:not(.disabled) {
-        background-color: #f0f9ff;
-        color: #1d4ed8;
-    }
-
-    .size-option:hover:not(.disabled):not(:last-child)::after {
-        background-color: #3b82f6;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
     .size-option.selected {
-        background: #2563eb !important;
+        background-color: #3b82f6 !important;
         color: white !important;
-    }
-
-    .size-option.selected:not(:last-child)::after {
-        background-color: #1d4ed8;
-    }
-
-    .size-option.selected .size-label {
-        color: white !important;
-        font-weight: 700;
-    }
-
-    .size-option.selected .stock-info {
-        color: rgba(255, 255, 255, 0.9) !important;
-    }
-
-    .size-option.disabled {
-        background-color: #f9fafb;
-        color: #9ca3af;
-        cursor: not-allowed;
-        opacity: 0.6;
-    }
-
-    .size-option.disabled:not(:last-child)::after {
-        background-color: #e5e7eb;
-    }
-
-    .size-option .size-label {
-        font-weight: 600;
-        font-size: 16px;
-        margin-bottom: 4px;
-        letter-spacing: 0.5px;
-    }
-
-    .size-option .stock-info {
-        font-size: 11px;
-        font-weight: 500;
-        color: #6b7280;
-    }
-    
-    /* Mobile adjustments */
-    @media (max-width: 640px) {
-        #sizeSelectionModal .relative {
-            margin: 1rem;
-            max-width: none;
-        }
-        
-        #sizeOptionsContainer {
-            max-width: 250px;
-        }
-        
-        .size-option {
-            min-height: 50px;
-            padding: 12px 8px;
-        }
-        
-        .size-option .size-label {
-            font-size: 14px;
-        }
-        
-        .size-option .stock-info {
-            font-size: 10px;
-        }
-    }
-    
-    /* Mobile adjustments */
-    @media (max-width: 640px) {
-        #sizeSelectionModal .relative {
-            margin: 1rem;
-            max-width: none;
-        }
-        
-        #sizeOptionsContainer {
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-        }
-        
-        .size-option {
-            min-height: 70px;
-            padding: 12px 6px;
-        }
-        
-        .size-option .size-label {
-            font-size: 14px;
-        }
-    }
-
-    /* Wishlist button active state */
-    .wishlist-btn.active {
-        background-color: #fef2f2;
-        border-color: #fecaca;
+        border-color: #3b82f6 !important;
     }
 
     /* Color classes */
-    .text-green-600 { color: #059669; }
     .text-red-600 { color: #dc2626; }
+    .text-green-600 { color: #059669; }
     .text-blue-600 { color: #2563eb; }
-    .text-blue-700 { color: #1d4ed8; }
-    .text-blue-900 { color: #1e3a8a; }
-
-    /* Toast Animation */
-    @keyframes slideInRight {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-    }
-    
-    @keyframes slideOutRight {
-        from { transform: translateX(0); opacity: 1; }
-        to { transform: translateX(100%); opacity: 0; }
-    }
-    
-    .fixed.top-4.right-4 { animation: slideInRight 0.3s ease-out; }
 </style>
 @endpush
 
 @push('scripts')
 <script>
-// EXACT SAME JavaScript as products page
-
-console.log('🚀 Enhanced JavaScript with Price Support...');
-
-window.addEventListener('load', function() {
-    setupSizeSelection();
-});
-
-// Update sort function
+// Sort and filter functions
 function updateSort(sortValue) {
-    console.log('🔄 Updating sort to:', sortValue);
-    
     const url = new URL(window.location.href);
     url.searchParams.set('sort', sortValue);
     url.searchParams.delete('page');
-    
     window.location.href = url.toString();
 }
 
-// Clear filters function
 function clearFilters() {
-    console.log('🧹 Clearing all filters...');
     window.location.href = '{{ route("black-friday.index") }}';
 }
 
-function setupSizeSelection() {
-    document.addEventListener('click', handleClick);
-}
-
-function handleClick(e) {
-    // Size select button
+// Modal and size selection
+document.addEventListener('click', function(e) {
     if (e.target.closest('.size-select-btn')) {
         e.preventDefault();
         openSizeModal(e.target.closest('.size-select-btn'));
         return;
     }
     
-    // Close modal
     if (e.target.id === 'closeModalBtn' || e.target.closest('#closeModalBtn') || e.target.id === 'sizeSelectionModal') {
         closeModal();
         return;
     }
     
-    // Size option
     if (e.target.closest('.size-option')) {
         var option = e.target.closest('.size-option');
         if (!option.classList.contains('disabled')) {
@@ -764,14 +518,12 @@ function handleClick(e) {
         }
         return;
     }
-}
+});
 
 function openSizeModal(button) {
     var productId = button.getAttribute('data-product-id');
     var productName = button.getAttribute('data-product-name');
     var defaultPrice = button.getAttribute('data-price') || '0';
-    
-    console.log('Opening modal for:', productName, 'Price:', defaultPrice);
     
     var modal = document.getElementById('sizeSelectionModal');
     var title = document.getElementById('modalProductName');
@@ -779,14 +531,11 @@ function openSizeModal(button) {
     
     if (!modal || !container) return;
     
-    // Set title
     if (title) title.textContent = 'Select Size - ' + productName;
     
-    // Get sizes from product card
     var productCard = button.closest('.product-card');
     var sizeContainer = productCard ? productCard.querySelector('#sizeContainer-' + productId) : null;
     
-    // Clear container
     container.innerHTML = '';
     
     if (sizeContainer) {
@@ -817,12 +566,9 @@ function openSizeModal(button) {
                 (available ? stock + ' left' : 'Out of stock') + '</div>';
             
             container.appendChild(div);
-            
-            console.log('Size option created:', size, 'Price:', price);
         });
     }
     
-    // Show modal
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
@@ -834,9 +580,6 @@ function selectSize(element) {
     var productId = element.getAttribute('data-product-id');
     var price = element.getAttribute('data-price') || '0';
     
-    console.log('Size selected:', size, 'Price:', price);
-    
-    // Clear selections
     document.querySelectorAll('.size-option').forEach(function(opt) {
         opt.classList.remove('selected');
         opt.style.backgroundColor = '';
@@ -844,13 +587,11 @@ function selectSize(element) {
         opt.style.borderColor = '';
     });
     
-    // Mark selected
     element.classList.add('selected');
     element.style.backgroundColor = '#3b82f6';
     element.style.color = 'white';
     element.style.borderColor = '#3b82f6';
     
-    // Update UI elements
     var sizeInfo = document.getElementById('selectedSizeInfo');
     var sizeDisplay = document.getElementById('selectedSizeDisplay');
     var sizeStock = document.getElementById('selectedSizeStock');
@@ -862,11 +603,9 @@ function selectSize(element) {
     if (sizeDisplay) sizeDisplay.textContent = size;
     if (sizeStock) sizeStock.textContent = stock + ' available';
     
-    // Update price
     if (sizePriceElement) {
         var formattedPrice = 'Rp ' + new Intl.NumberFormat('id-ID').format(parseInt(price));
         sizePriceElement.textContent = formattedPrice;
-        console.log('💰 Price updated to:', formattedPrice);
     }
     
     if (productInput) productInput.value = productId;
@@ -884,13 +623,11 @@ function closeModal() {
         document.body.style.overflow = '';
     }
     
-    // Reset form
     var form = document.getElementById('sizeAddToCartForm');
     var sizeInfo = document.getElementById('selectedSizeInfo');
     if (form) form.classList.add('hidden');
     if (sizeInfo) sizeInfo.classList.add('hidden');
     
-    // Clear selections
     document.querySelectorAll('.size-option').forEach(function(opt) {
         opt.classList.remove('selected');
         opt.style.backgroundColor = '';
@@ -899,7 +636,34 @@ function closeModal() {
     });
 }
 
-// EXACT SAME wishlist and toast functions as products
+// Toast functions
+function showToast(message, type = 'success') {
+    const toast = document.getElementById('toastNotification');
+    const icon = document.getElementById('toastIcon');
+    const messageEl = document.getElementById('toastMessage');
+    if (!toast || !icon || !messageEl) return;
+
+    messageEl.textContent = message;
+    icon.className = 'fas ';
+    
+    switch(type) {
+        case 'success': icon.className += 'fa-check-circle text-green-500'; break;
+        case 'error': icon.className += 'fa-exclamation-circle text-red-500'; break;
+        case 'info': icon.className += 'fa-info-circle text-blue-500'; break;
+        default: icon.className += 'fa-check-circle text-green-500';
+    }
+
+    toast.classList.remove('hidden');
+    clearTimeout(window.__toastTimer);
+    window.__toastTimer = setTimeout(hideToast, 3000);
+}
+
+function hideToast() {
+    const toast = document.getElementById('toastNotification');
+    if (toast) toast.classList.add('hidden');
+}
+
+// Wishlist functionality
 const WISHLIST_CSRF = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
 document.addEventListener('click', function (ev) {
@@ -932,7 +696,7 @@ document.addEventListener('click', function (ev) {
         }
 
         if (!data || data.success === false) {
-            showToast((data && data.message) || 'Gagal mengubah wishlist', 'error');
+            showToast((data && data.message) || 'Failed to update wishlist', 'error');
             return;
         }
 
@@ -949,42 +713,15 @@ document.addEventListener('click', function (ev) {
                 .forEach(el => el.textContent = data.wishlist_count);
         }
 
-        showToast(`${productName} ${added ? 'ditambahkan ke' : 'dihapus dari'} wishlist`,
+        showToast(`${productName} ${added ? 'added to' : 'removed from'} wishlist`,
                   added ? 'success' : 'info');
     })
     .catch(() => {
-        showToast('Terjadi kesalahan saat toggle wishlist.', 'error');
+        showToast('Error updating wishlist.', 'error');
     })
     .finally(() => {
         btn.disabled = false;
     });
 });
-
-// Toast utilities
-function showToast(message, type = 'success') {
-    const toast = document.getElementById('toastNotification');
-    const icon = document.getElementById('toastIcon');
-    const messageEl = document.getElementById('toastMessage');
-    if (!toast || !icon || !messageEl) return;
-
-    messageEl.textContent = message;
-
-    icon.className = 'fas ';
-    switch(type) {
-        case 'success': icon.className += 'fa-check-circle text-green-500'; break;
-        case 'error':   icon.className += 'fa-exclamation-circle text-red-500'; break;
-        case 'info':    icon.className += 'fa-info-circle text-blue-500'; break;
-        default:        icon.className += 'fa-check-circle text-green-500';
-    }
-
-    toast.classList.remove('hidden');
-    clearTimeout(window.__toastTimer);
-    window.__toastTimer = setTimeout(hideToast, 3000);
-}
-
-function hideToast() {
-    const toast = document.getElementById('toastNotification');
-    if (toast) toast.classList.add('hidden');
-}
 </script>
 @endpush

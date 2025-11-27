@@ -786,16 +786,19 @@ public function calculateShipping(Request $request)
             ];
         }
 
+        // ⭐ FILTER: Hapus layanan JNE yang tidak diinginkan
+        $shippingOptions = $this->filterCheckoutJNEServices($shippingOptions);
+
         if (empty($shippingOptions)) {
-            Log::error("❌ Web: No valid shipping options after parsing", [
+            Log::error("❌ Web: No valid shipping options after parsing and filtering", [
                 'raw_options_count' => count($data['data']),
                 'sample_raw_option' => $data['data'][0] ?? null
             ]);
             
             return response()->json([
                 'success' => false,
-                'error' => 'PARSING_FAILED',
-                'message' => 'Unable to process shipping options',
+                'error' => 'NO_SHIPPING_OPTIONS_AFTER_FILTERING',
+                'message' => 'No shipping services available for this destination after filtering',
                 'debug' => [
                     'raw_options_count' => count($data['data'])
                 ]
@@ -848,6 +851,7 @@ public function calculateShipping(Request $request)
         ], 500);
     }
 }
+
 
 private function generateSmartSearchVariations($search)
 {
@@ -2747,6 +2751,38 @@ private function calculateOrderPoints(Order $order)
         
         return null;
     }
+}
+
+/**
+ * Helper method untuk filtering di CheckoutController
+ */
+private function filterCheckoutJNEServices($shippingOptions)
+{
+    $excludedServices = ['CTCSPS', 'JTR<130', 'JTR>130', 'JTR>200'];
+    
+    $filtered = array_filter($shippingOptions, function($option) use ($excludedServices) {
+        if (!isset($option['service'])) {
+            return true;
+        }
+        
+        $service = trim($option['service']);
+        
+        // Skip excluded services
+        if (in_array($service, $excludedServices)) {
+            Log::info("🚫 Checkout filtering out JNE service: {$service}");
+            return false;
+        }
+        
+        // Skip JTR pattern services
+        if (preg_match('/^JTR[<>]?\d+$/', $service)) {
+            Log::info("🚫 Checkout filtering out JTR service: {$service}");
+            return false;
+        }
+        
+        return true;
+    });
+    
+    return array_values($filtered); // Re-index array
 }
 
 }

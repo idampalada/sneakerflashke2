@@ -253,6 +253,7 @@ public function calculateShipping($originId, $destinationId, $weight, $courier =
  * Parse shipping response with the correct format from /calculate/domestic-cost
  * Response format: {"meta": {...}, "data": [{"name": "...", "code": "jne", "service": "...", "description": "...", "cost": 10000, "etd": "1 day"}]}
  */
+// REPLACEMENT FUNCTION 1: parseShippingResponseFixed() dengan filtering
 private function parseShippingResponseFixed($data)
 {
     $options = [];
@@ -276,7 +277,10 @@ private function parseShippingResponseFixed($data)
             }
         }
         
-        Log::info('🎯 Service parsed ' . count($options) . ' shipping options', [
+        // ⭐ FILTER: Hapus layanan JNE yang tidak diinginkan
+        $options = $this->filterUnwantedJNEServices($options);
+        
+        Log::info('🎯 Service parsed and filtered ' . count($options) . ' shipping options', [
             'sample_options' => array_map(function($opt) {
                 return $opt['service'] . ' - Rp ' . number_format($opt['cost']);
             }, array_slice($options, 0, 3))
@@ -292,6 +296,8 @@ private function parseShippingResponseFixed($data)
     
     return $options;
 }
+
+// REPLACEMENT FUNCTION 2: parseJNEShippingResponse() dengan filtering
 private function parseJNEShippingResponse($data)
 {
     $jneOptions = [];
@@ -345,6 +351,9 @@ private function parseJNEShippingResponse($data)
             }
         }
         
+        // ⭐ FILTER: Hapus layanan JNE yang tidak diinginkan
+        $jneOptions = $this->filterUnwantedJNEServices($jneOptions);
+        
         // Sort JNE options: REG first, then by cost
         usort($jneOptions, function($a, $b) {
             // REG service first
@@ -355,7 +364,7 @@ private function parseJNEShippingResponse($data)
             return $a['cost'] <=> $b['cost'];
         });
         
-        Log::info("📋 Parsed JNE options", [
+        Log::info("📋 Parsed and filtered JNE options", [
             'total_jne_options' => count($jneOptions),
             'services' => array_map(function($opt) {
                 return $opt['service'] . ' (Rp ' . number_format($opt['cost']) . ')';
@@ -1263,5 +1272,73 @@ private function generateFullAddress($result)
             ];
         }
     }
+    private function filterUnwantedJNEServices($shippingOptions)
+{
+    $excludedServices = [
+        'CTCSPS',    // City Courier Special
+        'JTR<130',   // JTR Trucking under 130kg
+        'JTR>130',   // JTR Trucking over 130kg  
+        'JTR>200',   // JTR Trucking over 200kg
+    ];
+    
+    if (empty($shippingOptions) || !is_array($shippingOptions)) {
+        return $shippingOptions;
+    }
+    
+    $filteredOptions = [];
+    
+    foreach ($shippingOptions as $option) {
+        if (!is_array($option) || !isset($option['service'])) {
+            continue;
+        }
+        
+        $service = trim($option['service']);
+        
+        // Skip layanan yang ada dalam daftar excluded
+        if (in_array($service, $excludedServices)) {
+            Log::info("🚫 Filtering out JNE service: {$service}");
+            continue;
+        }
+        
+        // Skip layanan JTR dengan pattern khusus
+        if ($this->isJTRService($service)) {
+            Log::info("🚫 Filtering out JTR service: {$service}");
+            continue;
+        }
+        
+        $filteredOptions[] = $option;
+    }
+    
+    Log::info("✅ JNE Service filtering completed", [
+        'original_count' => count($shippingOptions),
+        'filtered_count' => count($filteredOptions),
+        'removed_count' => count($shippingOptions) - count($filteredOptions)
+    ]);
+    
+    return $filteredOptions;
+}
+
+/**
+ * Cek apakah service adalah JTR yang tidak diinginkan
+ *
+ * @param string $service
+ * @return bool
+ */
+private function isJTRService($service)
+{
+    $jtrPatterns = [
+        '/^JTR<\d+$/',     // JTR<130, JTR<100, dll
+        '/^JTR>\d+$/',     // JTR>130, JTR>200, dll  
+        '/^JTR\d+$/',      // JTR130, JTR200, dll
+    ];
+    
+    foreach ($jtrPatterns as $pattern) {
+        if (preg_match($pattern, $service)) {
+            return true;
+        }
+    }
+    
+    return false;
+}
     
 }

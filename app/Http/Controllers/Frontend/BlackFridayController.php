@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 /**
- * BlackFridayController - Fixed to properly handle size variants
+ * BlackFridayController - Fixed to properly handle size variants and pricing display
  */
 class BlackFridayController extends Controller
 {
@@ -74,20 +74,37 @@ class BlackFridayController extends Controller
             // Get products with pagination
             $products = $query->paginate(12)->appends($request->query());
 
-            // Process products for additional fields
+            // ⭐ FIXED: Process products with proper pricing hierarchy
             $products->getCollection()->transform(function ($product) {
-                // Calculate final price
-                $finalPrice = ($product->sale_price && $product->sale_price < $product->price) 
-                    ? $product->sale_price 
-                    : $product->price;
+                // ⭐ PRICE HIERARCHY: original_price > price > sale_price (what customer pays)
+                $originalPrice = $product->original_price ?? null;
+                $currentPrice = $product->price ?? 0;
+                $salePrice = $product->sale_price ?? null;
+                
+                // Determine final price (what customer actually pays)
+                $finalPrice = $currentPrice;
+                if ($salePrice && $salePrice < $currentPrice) {
+                    $finalPrice = $salePrice;
+                }
+                
                 $product->final_price = $finalPrice;
                 
-                // Calculate discount percentage
+                // ⭐ FIXED: Calculate discount percentage properly
                 $discountPercentage = 0;
-                if ($product->original_price && $product->original_price > $finalPrice) {
-                    $discountPercentage = round((($product->original_price - $finalPrice) / $product->original_price) * 100);
+                $displayOriginalPrice = null;
+                
+                if ($originalPrice && $originalPrice > $finalPrice) {
+                    // Use original_price as base for discount
+                    $discountPercentage = round((($originalPrice - $finalPrice) / $originalPrice) * 100);
+                    $displayOriginalPrice = $originalPrice;
+                } elseif (!$originalPrice && $salePrice && $salePrice < $currentPrice) {
+                    // Fallback: use current price as base
+                    $discountPercentage = round((($currentPrice - $salePrice) / $currentPrice) * 100);
+                    $displayOriginalPrice = $currentPrice;
                 }
+                
                 $product->calculated_discount_percentage = $discountPercentage;
+                $product->display_original_price = $displayOriginalPrice;
                 
                 // Format main image
                 if ($product->featured_image) {
@@ -155,11 +172,12 @@ class BlackFridayController extends Controller
                     $product->total_stock = $product->stock_quantity ?? 0;
                 }
                 
-                // Format pricing
+                // ⭐ FIXED: Format pricing for display - match products page exactly
                 $product->formatted_price = 'Rp ' . number_format($finalPrice, 0, ',', '.');
-                if ($product->original_price && $product->original_price > $finalPrice) {
-                    $product->formatted_original_price = 'Rp ' . number_format($product->original_price, 0, ',', '.');
-                    $product->discount_amount = $product->original_price - $finalPrice;
+                
+                if ($displayOriginalPrice) {
+                    $product->formatted_original_price = 'Rp ' . number_format($displayOriginalPrice, 0, ',', '.');
+                    $product->discount_amount = $displayOriginalPrice - $finalPrice;
                 } else {
                     $product->formatted_original_price = null;
                     $product->discount_amount = 0;
@@ -271,14 +289,21 @@ class BlackFridayController extends Controller
                 $sizeVariants = $sizeVariants->sortBy('size')->unique('size')->values();
             }
 
-            // Calculate pricing
-            $finalPrice = ($product->sale_price && $product->sale_price < $product->price) 
-                ? $product->sale_price 
-                : $product->price;
+            // ⭐ FIXED: Calculate pricing with proper hierarchy
+            $originalPrice = $product->original_price ?? null;
+            $currentPrice = $product->price ?? 0;
+            $salePrice = $product->sale_price ?? null;
+            
+            $finalPrice = $currentPrice;
+            if ($salePrice && $salePrice < $currentPrice) {
+                $finalPrice = $salePrice;
+            }
             
             $discountPercentage = 0;
-            if ($product->original_price && $product->original_price > $finalPrice) {
-                $discountPercentage = round((($product->original_price - $finalPrice) / $product->original_price) * 100);
+            if ($originalPrice && $originalPrice > $finalPrice) {
+                $discountPercentage = round((($originalPrice - $finalPrice) / $originalPrice) * 100);
+            } elseif (!$originalPrice && $salePrice && $salePrice < $currentPrice) {
+                $discountPercentage = round((($currentPrice - $salePrice) / $currentPrice) * 100);
             }
 
             // Process product images
@@ -311,9 +336,13 @@ class BlackFridayController extends Controller
             $product->calculated_discount_percentage = $discountPercentage;
             $product->formatted_price = 'Rp ' . number_format($finalPrice, 0, ',', '.');
             
-            if ($product->original_price && $product->original_price > $finalPrice) {
-                $product->formatted_original_price = 'Rp ' . number_format($product->original_price, 0, ',', '.');
-                $product->discount_amount = $product->original_price - $finalPrice;
+            // Set display original price
+            if ($originalPrice && $originalPrice > $finalPrice) {
+                $product->formatted_original_price = 'Rp ' . number_format($originalPrice, 0, ',', '.');
+                $product->discount_amount = $originalPrice - $finalPrice;
+            } elseif (!$originalPrice && $salePrice && $salePrice < $currentPrice) {
+                $product->formatted_original_price = 'Rp ' . number_format($currentPrice, 0, ',', '.');
+                $product->discount_amount = $currentPrice - $salePrice;
             } else {
                 $product->formatted_original_price = null;
                 $product->discount_amount = 0;
@@ -386,9 +415,10 @@ class BlackFridayController extends Controller
         // Convert to string first
         $cleanSize = (string) $size;
         
-        // Remove JSON formatting
+        // Remove JSON formatting and backslashes
         $cleanSize = trim($cleanSize, '"\'');
         $cleanSize = str_replace(['[', ']', '"', '\\'], '', $cleanSize);
+        $cleanSize = preg_replace('/[\x00-\x1F\x7F]/', '', $cleanSize); // Remove control characters
         
         // Remove extra spaces and trim
         $cleanSize = trim($cleanSize);

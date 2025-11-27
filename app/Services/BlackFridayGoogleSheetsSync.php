@@ -204,89 +204,117 @@ class BlackFridayGoogleSheetsSync
             }
         }
         
-        // ⭐ FIXED: Match exact database schema from your screenshot
-        $productData = [
-            'product_type' => 'BLACKFRIDAY',  // FIXED: Always BLACKFRIDAY
-            'category_id' => $this->getBlackFridayCategoryId(),  // Get or create Black Friday category
-            'brand' => $this->sanitizeString($record['brand']),
-            'related_product' => $this->sanitizeString($record['related_product'] ?? ''),
-            'name' => $this->sanitizeString($record['name']),
-            'description' => $this->sanitizeString($record['description'] ?? ''),
-            'price' => $this->sanitizeFloat($record['sale_price'] ?? $record['price'] ?? 0),
-            'sale_price' => $this->sanitizeFloat($record['sale_price'] ?? 0), 
-            'original_price' => $this->sanitizeFloat($record['price'] ?? 0),
-            'sku' => $this->sanitizeString($record['sku']),
-            'sku_parent' => $this->sanitizeString($record['sku_parent'] ?? ''),
-            'stock_quantity' => $this->sanitizeInt($record['stock_quantity'] ?? 1),
-            'min_stock_level' => $this->sanitizeInt($record['min_stock_level'] ?? 5),
-            'weight' => $this->sanitizeFloat($record['weight'] ?? 500), // Default 500g
-            'is_active' => true,
-            'is_featured' => $this->sanitizeBool($record['is_featured'] ?? 'false'),
-            'is_featured_sale' => $this->sanitizeBool($record['is_featured'] ?? 'false')
-        ];
+        // ⭐ SESUAI MODEL: price = harga original, sale_price = harga diskon
+        $originalPrice = $this->sanitizeFloat($record['price'] ?? 0);          // Harga asli (3599000)
+        $salePrice = $this->sanitizeFloat($record['sale_price'] ?? 0);         // Harga Black Friday (400000)
         
-        // Handle image URLs - store as JSON array
-        $imageUrls = [];
+        // Validasi: pastikan sale_price lebih kecil dari price
+        if ($salePrice <= 0 || $salePrice >= $originalPrice) {
+            // Jika sale_price tidak valid, set null (tidak ada diskon)
+            $salePrice = null;
+        }
+        
+        // Build available sizes array
+        $availableSizes = [];
+        $sizesString = $this->sanitizeString($record['available_sizes'] ?? '');
+        if (!empty($sizesString)) {
+            $availableSizes = [$sizesString];
+        }
+        
+        // Build images array
+        $images = [];
         for ($i = 1; $i <= 5; $i++) {
-            $imageKey = "images_$i";
-            if (!empty($record[$imageKey] ?? '')) {
-                $imageUrls[] = trim($record[$imageKey]);
+            $imageUrl = $this->sanitizeString($record["images_$i"] ?? '');
+            if (!empty($imageUrl)) {
+                $images[] = $imageUrl;
             }
         }
         
-        // Store images as JSON (as per database schema)
-        if (!empty($imageUrls)) {
-            $productData['images'] = json_encode($imageUrls);
-            // Set main image for featured_image field
-            $productData['featured_image'] = $imageUrls[0];
-        }
+        // Build specifications array
+        $specifications = [
+            'weight' => $this->sanitizeFloat($record['weight'] ?? 0),
+            'length' => $this->sanitizeFloat($record['lengh'] ?? 0), // Note: 'lengh' typo from sheet
+            'width' => $this->sanitizeFloat($record['wide'] ?? 0),
+            'height' => $this->sanitizeFloat($record['high'] ?? 0),
+        ];
         
-        // ⭐ FIXED: Handle size properly using available_sizes JSON field
-        $size = $this->sanitizeString($record['available_sizes'] ?? '');
-        if (!empty($size)) {
-            // Store as JSON array in available_sizes column
-            $productData['available_sizes'] = json_encode([$size]);
+        // ⭐ SESUAI FILLABLE MODEL: Menggunakan field yang ada di model
+        $productData = [
+            'product_type' => 'BLACKFRIDAY',  // Always BLACKFRIDAY
+            'category_id' => $this->getBlackFridayCategoryId(),
+            'name' => $this->sanitizeString($record['name']),
+            'brand' => $this->sanitizeString($record['brand']),
+            'description' => $this->sanitizeString($record['description'] ?? ''),
+            'sku' => $this->sanitizeString($record['sku']),
+            'sku_parent' => $this->sanitizeString($record['sku_parent'] ?? ''),
             
-            // For specifications JSON field
-            $productData['specifications'] = json_encode([
-                'size' => $size,
-                'type' => 'BLACKFRIDAY'
-            ]);
-        }
+            // ⭐ PRICING SESUAI MODEL: price = original, sale_price = discount
+            'price' => $originalPrice,        // Harga asli/original (3599000)
+            'sale_price' => $salePrice,       // Harga diskon Black Friday (400000) atau null
+            
+            'available_sizes' => $availableSizes,
+            'stock_quantity' => $this->sanitizeInt($record['stock_quantity'] ?? 1),
+            'images' => $images,
+            'specifications' => $specifications,
+            
+            // Standard fields
+            'is_active' => true,
+            'is_featured' => false,
+            'weight' => $specifications['weight'],
+            'length' => $specifications['length'], 
+            'width' => $specifications['width'],
+            'height' => $specifications['height'],
+        ];
         
-        // Handle available_colors as JSON
-        if (!empty($record['available_colors'] ?? '')) {
-            $colors = explode(',', $record['available_colors']);
-            $colors = array_map('trim', $colors);
-            $productData['available_colors'] = json_encode($colors);
-        }
-        
-        // Generate unique slug
-        $baseSlug = Str::slug($productData['name']);
-        $slug = $baseSlug;
+        // Generate unique slug if needed
+        $slug = Str::slug($productData['name']);
         $counter = 1;
-        
         while (Product::where('slug', $slug)->where('sku', '!=', $productData['sku'])->exists()) {
-            $slug = $baseSlug . '-' . $counter;
+            $slug = Str::slug($productData['name']) . '-' . $counter;
             $counter++;
         }
-        
         $productData['slug'] = $slug;
+        
+        // ⭐ ENHANCED LOGGING: Show pricing details
+        $discountAmount = $salePrice ? ($originalPrice - $salePrice) : 0;
+        $discountPercent = $salePrice && $originalPrice > 0 ? 
+                          round((($originalPrice - $salePrice) / $originalPrice) * 100) : 0;
         
         Log::info("🖤 Processing Black Friday product", [
             'line' => $lineNumber,
             'sku' => $productData['sku'],
             'name' => $productData['name'],
-            'product_type' => $productData['product_type'],
-            'category_id' => $productData['category_id'],
+            'price' => $productData['price'],           // Original price (3599000)
+            'sale_price' => $productData['sale_price'], // Black Friday price (400000)
+            'discount_amount' => $discountAmount,        // 3199000
+            'discount_percent' => $discountPercent,      // 89%
             'available_sizes' => $productData['available_sizes'] ?? null
         ]);
         
-        // Update or create in products table
-        Product::updateOrCreate(
-            ['sku' => $productData['sku']],
-            $productData
-        );
+        // ⭐ UPDATE/CREATE PRODUCT
+        $existingProduct = Product::where('sku', $productData['sku'])->first();
+        
+        if ($existingProduct) {
+            // UPDATE existing product
+            $existingProduct->update($productData);
+            Log::info("✅ Updated Black Friday product", [
+                'id' => $existingProduct->id,
+                'sku' => $productData['sku'],
+                'price' => $productData['price'],
+                'sale_price' => $productData['sale_price'],
+                'discount_percent' => $discountPercent
+            ]);
+        } else {
+            // CREATE new product
+            $newProduct = Product::create($productData);
+            Log::info("🆕 Created Black Friday product", [
+                'id' => $newProduct->id,
+                'sku' => $productData['sku'],
+                'price' => $productData['price'],
+                'sale_price' => $productData['sale_price'],
+                'discount_percent' => $discountPercent
+            ]);
+        }
     }
     
     protected function sanitizeString($value)
