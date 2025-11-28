@@ -258,6 +258,80 @@ class OrderResource extends Resource
                             ->extraAttributes(['style' => 'white-space: pre-line; background: #f9fafb; padding: 12px; border-radius: 6px; border: 1px solid #e5e7eb;'])
                             ->columnSpanFull(),
                     ]),
+
+                // NEW: Order Items Section
+                Forms\Components\Section::make('Order Items')
+                    ->schema([
+                        Forms\Components\Placeholder::make('order_items_display')
+                            ->label('Products Ordered')
+                            ->content(function ($record) {
+                                if (!$record) return 'No items';
+                                
+                                $orderItems = $record->orderItems()->with('product')->get();
+                                
+                                if ($orderItems->isEmpty()) {
+                                    return 'No items found';
+                                }
+                                
+                                $itemsDisplay = [];
+                                
+                                foreach ($orderItems as $item) {
+                                    $itemInfo = [];
+                                    
+                                    // Basic item info from order_items table
+                                    $itemInfo[] = "📦 " . $item->product_name;
+                                    $itemInfo[] = "   SKU: " . ($item->product_sku ?: 'N/A');
+                                    $itemInfo[] = "   Quantity: " . $item->quantity;
+                                    $itemInfo[] = "   Price: Rp " . number_format($item->product_price, 0, ',', '.');
+                                    $itemInfo[] = "   Total: Rp " . number_format($item->total_price, 0, ',', '.');
+                                    
+                                    // Product details from products table (if product still exists)
+                                    if ($item->product) {
+                                        $product = $item->product;
+                                        
+                                        // Available sizes from products table
+                                        if ($product->available_sizes) {
+                                            $sizes = is_array($product->available_sizes) 
+                                                ? $product->available_sizes 
+                                                : json_decode($product->available_sizes, true);
+                                            
+                                            if ($sizes && !empty($sizes)) {
+                                                $itemInfo[] = "   Available Sizes: " . implode(', ', $sizes);
+                                            }
+                                        }
+                                        
+                                        // Additional product info
+                                        if ($product->brand) {
+                                            $itemInfo[] = "   Brand: " . $product->brand;
+                                        }
+                                        
+                                        if ($product->available_colors) {
+                                            $colors = is_array($product->available_colors) 
+                                                ? $product->available_colors 
+                                                : json_decode($product->available_colors, true);
+                                            
+                                            if ($colors && !empty($colors)) {
+                                                $itemInfo[] = "   Available Colors: " . implode(', ', $colors);
+                                            }
+                                        }
+                                        
+                                        $itemInfo[] = "   Current Stock: " . $product->stock_quantity;
+                                        
+                                        if ($product->category) {
+                                            $itemInfo[] = "   Category: " . $product->category->name;
+                                        }
+                                    } else {
+                                        $itemInfo[] = "   ⚠️ Product no longer available in database";
+                                    }
+                                    
+                                    $itemsDisplay[] = implode("\n", $itemInfo);
+                                }
+                                
+                                return implode("\n\n" . str_repeat('─', 50) . "\n\n", $itemsDisplay);
+                            })
+                            ->extraAttributes(['style' => 'white-space: pre-line; background: #f9fafb; padding: 16px; border-radius: 8px; border: 1px solid #e5e7eb; font-family: monospace; max-height: 400px; overflow-y: auto;'])
+                            ->columnSpanFull(),
+                    ]),
             ]);
     }
 
@@ -335,6 +409,13 @@ class OrderResource extends Resource
                     ->dateTime('d M Y, H:i')
                     ->sortable()
                     ->label('Order Date'),
+                    
+                // NEW: Add items count column
+                Tables\Columns\TextColumn::make('order_items_count')
+                    ->counts('orderItems')
+                    ->label('Items')
+                    ->badge()
+                    ->color('primary'),
             ])
             ->filters([
                 // UPDATED: Single Status Filter

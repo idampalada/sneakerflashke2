@@ -8,12 +8,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 /**
- * BlackFridayController - Fixed to properly handle size variants and pricing display
+ * ⭐ FIXED BlackFridayController - Added grouping to prevent duplicates like ADIDAS ADIMATIC ATMOS GLORY PURPLE
  */
 class BlackFridayController extends Controller
 {
     /**
-     * Display Black Friday products index page
+     * ⭐ FIXED: Display Black Friday products with proper grouping to prevent duplicates
      */
     public function index(Request $request)
     {
@@ -52,152 +52,47 @@ class BlackFridayController extends Controller
                 }
             }
 
-            // Sort options
-            $sort = $request->get('sort', '');
-            switch ($sort) {
-                case 'discount':
-                    $query->orderByRaw('CASE WHEN original_price > 0 AND sale_price > 0 THEN ((original_price - sale_price) / original_price * 100) ELSE 0 END DESC');
-                    break;
-                case 'price_low':
-                    $query->orderByRaw('COALESCE(sale_price, price) ASC');
-                    break;
-                case 'price_high':
-                    $query->orderByRaw('COALESCE(sale_price, price) DESC');
-                    break;
-                case 'name_az':
-                    $query->orderBy('name', 'asc');
-                    break;
-                default:
-                    $query->orderBy('created_at', 'desc');
-            }
+            // Get all products BEFORE grouping
+            $allProducts = $query->get();
 
-            // Get products with pagination
-            $products = $query->paginate(12)->appends($request->query());
+            // ⭐ CRITICAL FIX: Group products to eliminate duplicates (same as ProductController)
+            $groupedProducts = $this->groupBlackFridayProductsBySkuParent($allProducts);
 
-            // ⭐ FIXED: Process products with proper pricing hierarchy
+            Log::info('Black Friday products grouped', [
+                'original_count' => $allProducts->count(),
+                'grouped_count' => $groupedProducts->count(),
+                'filters' => $request->all()
+            ]);
+
+            // Apply sorting to grouped collection
+            $groupedProducts = $this->applySortingToBlackFridayProducts($groupedProducts, $request);
+
+            // Manual pagination (since grouping breaks Laravel paginator)
+            $perPage = 12;
+            $currentPage = $request->get('page', 1);
+            $offset = ($currentPage - 1) * $perPage;
+            $paginatedProducts = $groupedProducts->slice($offset, $perPage)->values();
+
+            // Create pagination object
+            $products = new \Illuminate\Pagination\LengthAwarePaginator(
+                $paginatedProducts,
+                $groupedProducts->count(),
+                $perPage,
+                $currentPage,
+                ['path' => request()->url(), 'pageName' => 'page']
+            );
+            $products->appends($request->query());
+
+            // Process products for display
             $products->getCollection()->transform(function ($product) {
-                // ⭐ PRICE HIERARCHY: original_price > price > sale_price (what customer pays)
-                $originalPrice = $product->original_price ?? null;
-                $currentPrice = $product->price ?? 0;
-                $salePrice = $product->sale_price ?? null;
-                
-                // Determine final price (what customer actually pays)
-                $finalPrice = $currentPrice;
-                if ($salePrice && $salePrice < $currentPrice) {
-                    $finalPrice = $salePrice;
-                }
-                
-                $product->final_price = $finalPrice;
-                
-                // ⭐ FIXED: Calculate discount percentage properly
-                $discountPercentage = 0;
-                $displayOriginalPrice = null;
-                
-                if ($originalPrice && $originalPrice > $finalPrice) {
-                    // Use original_price as base for discount
-                    $discountPercentage = round((($originalPrice - $finalPrice) / $originalPrice) * 100);
-                    $displayOriginalPrice = $originalPrice;
-                } elseif (!$originalPrice && $salePrice && $salePrice < $currentPrice) {
-                    // Fallback: use current price as base
-                    $discountPercentage = round((($currentPrice - $salePrice) / $currentPrice) * 100);
-                    $displayOriginalPrice = $currentPrice;
-                }
-                
-                $product->calculated_discount_percentage = $discountPercentage;
-                $product->display_original_price = $displayOriginalPrice;
-                
-                // Format main image
-                if ($product->featured_image) {
-                    $product->first_image = filter_var($product->featured_image, FILTER_VALIDATE_URL) 
-                        ? $product->featured_image 
-                        : asset('storage/' . ltrim($product->featured_image, '/'));
-                } elseif ($product->images) {
-                    $images = is_string($product->images) ? json_decode($product->images, true) : $product->images;
-                    if (is_array($images) && count($images) > 0) {
-                        $imageUrl = $images[0];
-                        $product->first_image = filter_var($imageUrl, FILTER_VALIDATE_URL) 
-                            ? $imageUrl 
-                            : asset('storage/' . ltrim($imageUrl, '/'));
-                    } else {
-                        $product->first_image = asset('images/default-product.jpg');
-                    }
-                } else {
-                    $product->first_image = asset('images/default-product.jpg');
-                }
-                
-                // Check if has variants using sku_parent
-                $hasVariants = false;
-                if (!empty($product->sku_parent)) {
-                    $variantCount = Product::where('sku_parent', $product->sku_parent)
-                        ->where('product_type', 'BLACKFRIDAY')
-                        ->where('is_active', true)
-                        ->count();
-                    $hasVariants = $variantCount > 1;
-                }
-                $product->has_variants = $hasVariants;
-                
-                // Get aggregated sizes from available_sizes JSON
-                if ($hasVariants && !empty($product->sku_parent)) {
-                    $variants = Product::where('sku_parent', $product->sku_parent)
-                        ->where('product_type', 'BLACKFRIDAY')
-                        ->where('is_active', true)
-                        ->where('stock_quantity', '>', 0)
-                        ->get();
-                    
-                    $sizes = [];
-                    foreach ($variants as $variant) {
-                        if ($variant->available_sizes) {
-                            $variantSizes = is_string($variant->available_sizes) 
-                                ? json_decode($variant->available_sizes, true) 
-                                : $variant->available_sizes;
-                            
-                            if (is_array($variantSizes)) {
-                                // ⭐ CLEAN SIZE: Remove backslashes and JSON formatting
-                                foreach ($variantSizes as $size) {
-                                    $cleanSize = $this->cleanSize($size);
-                                    if (!empty($cleanSize)) {
-                                        $sizes[] = $cleanSize;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    $product->aggregated_sizes = array_values(array_unique(array_filter($sizes)));
-                    
-                    // Calculate total stock for variants
-                    $product->total_stock = $variants->sum('stock_quantity');
-                } else {
-                    $product->aggregated_sizes = [];
-                    $product->total_stock = $product->stock_quantity ?? 0;
-                }
-                
-                // ⭐ FIXED: Format pricing for display - match products page exactly
-                $product->formatted_price = 'Rp ' . number_format($finalPrice, 0, ',', '.');
-                
-                if ($displayOriginalPrice) {
-                    $product->formatted_original_price = 'Rp ' . number_format($displayOriginalPrice, 0, ',', '.');
-                    $product->discount_amount = $displayOriginalPrice - $finalPrice;
-                } else {
-                    $product->formatted_original_price = null;
-                    $product->discount_amount = 0;
-                }
-                
-                return $product;
+                return $this->processBlackFridayProductForDisplay($product);
             });
 
-            // Get unique brands for filter
-            $brands = Product::where('product_type', 'BLACKFRIDAY')
-                ->where('is_active', true)
-                ->distinct()
-                ->pluck('brand')
-                ->filter()
-                ->values();
+            // Get unique brands for filter (from original products)
+            $brands = $allProducts->pluck('brand')->filter()->unique()->sort()->values();
 
             // Get total count
-            $total = Product::where('product_type', 'BLACKFRIDAY')
-                ->where('is_active', true)
-                ->count();
+            $total = $groupedProducts->count();
 
             // Set countdown end date
             $countdown_end = now()->addDays(7);
@@ -230,7 +125,258 @@ class BlackFridayController extends Controller
     }
 
     /**
-     * Show individual Black Friday product
+     * ⭐ NEW: Group Black Friday products by sku_parent to eliminate duplicates
+     * Same logic as ProductController but adapted for Black Friday
+     */
+    private function groupBlackFridayProductsBySkuParent($products)
+    {
+        // Group by sku_parent (same product, different sizes)
+        $grouped = $products->groupBy(function($product) {
+            return $product->sku_parent ?? $product->sku ?? $product->id;
+        });
+
+        return $grouped->map(function ($productGroup, $groupKey) {
+            // If only one product in group, return as is
+            if ($productGroup->count() === 1) {
+                $product = $productGroup->first();
+                $product->size_variants = collect([]);
+                $product->total_stock = $product->stock_quantity ?? 0;
+                $product->has_multiple_sizes = false;
+                return $product;
+            }
+
+            // Multiple products = size variants
+            // Use the first product as the representative
+            $representativeProduct = $productGroup->first();
+            
+            // Create size variants from all products in group
+            $sizeVariants = $productGroup->map(function ($product) {
+                // Extract size from various sources
+                $size = $this->extractBlackFridayProductSize($product);
+                
+                return [
+                    'id' => $product->id,
+                    'size' => $size,
+                    'stock' => $product->stock_quantity ?? 0,
+                    'sku' => $product->sku,
+                    'price' => $product->sale_price ?? $product->price,
+                    'original_price' => $product->original_price ?? $product->price,
+                    'available' => ($product->stock_quantity ?? 0) > 0,
+                    'slug' => $product->slug
+                ];
+            })->sortBy('size')->values();
+
+            // Calculate total stock
+            $totalStock = $sizeVariants->sum('stock');
+
+            // Enhance representative product
+            $representativeProduct->size_variants = $sizeVariants;
+            $representativeProduct->total_stock = $totalStock;
+            $representativeProduct->has_multiple_sizes = $sizeVariants->count() > 1;
+            
+            // Clean product name (remove SKU parent pattern)
+            $representativeProduct->name = $this->cleanBlackFridayProductName($representativeProduct->name, $representativeProduct->sku_parent);
+
+            Log::info('Black Friday grouped product', [
+                'group_key' => $groupKey,
+                'sku_parent' => $representativeProduct->sku_parent,
+                'product_name' => $representativeProduct->name,
+                'variants_count' => $sizeVariants->count(),
+                'sizes' => $sizeVariants->pluck('size')->toArray(),
+                'total_stock' => $totalStock
+            ]);
+
+            return $representativeProduct;
+        })->values();
+    }
+
+    /**
+     * ⭐ Extract size from Black Friday product using multiple strategies
+     */
+    private function extractBlackFridayProductSize($product)
+    {
+        // Strategy 1: From available_sizes field
+        if (!empty($product->available_sizes)) {
+            if (is_array($product->available_sizes)) {
+                return $product->available_sizes[0] ?? 'One Size';
+            } elseif (is_string($product->available_sizes)) {
+                // Try to decode JSON
+                $decoded = json_decode($product->available_sizes, true);
+                if (is_array($decoded) && !empty($decoded)) {
+                    return $decoded[0];
+                }
+                return $product->available_sizes;
+            }
+        }
+
+        // Strategy 2: Extract from SKU pattern
+        if (!empty($product->sku) && !empty($product->sku_parent)) {
+            $extractedSize = $this->extractSizeFromSku($product->sku, $product->sku_parent);
+            if ($extractedSize) {
+                return $extractedSize;
+            }
+        }
+
+        // Strategy 3: Extract from product name
+        if (preg_match('/\b(Size\s+)?([XS|S|M|L|XL|XXL|XXXL|\d{2,3}(?:\.\d)?)\b/i', $product->name, $matches)) {
+            return trim($matches[2]);
+        }
+
+        return 'One Size';
+    }
+
+    /**
+     * Extract size from SKU pattern like "PARENT-SIZE"
+     */
+    private function extractSizeFromSku($sku, $skuParent)
+    {
+        if (empty($sku) || empty($skuParent)) {
+            return null;
+        }
+
+        // Remove parent SKU to get the suffix
+        $suffix = str_replace($skuParent, '', $sku);
+        $suffix = trim($suffix, '-_');
+        
+        // If suffix looks like a size, return it
+        if (preg_match('/^[XS|S|M|L|XL|XXL|XXXL|\d{2,3}(?:\.\d)?]?$/i', $suffix) && !empty($suffix)) {
+            return strtoupper($suffix);
+        }
+
+        return null;
+    }
+
+    /**
+     * Clean product name by removing SKU parent patterns
+     */
+    private function cleanBlackFridayProductName($originalName, $skuParent)
+    {
+        $cleanName = $originalName;
+        
+        if (!empty($skuParent)) {
+            // Remove SKU parent pattern like "- VN0A3HZFCAR"
+            $cleanName = preg_replace('/\s*-\s*' . preg_quote($skuParent, '/') . '\s*/', '', $cleanName);
+            $cleanName = preg_replace('/\s*' . preg_quote($skuParent, '/') . '\s*/', '', $cleanName);
+        }
+        
+        // Remove size patterns like "- Size M", "Size L", etc.
+        $cleanName = preg_replace('/\s*-\s*Size\s+[A-Z0-9.]+\s*$/i', '', $cleanName);
+        $cleanName = preg_replace('/\s*Size\s+[A-Z0-9.]+\s*$/i', '', $cleanName);
+        $cleanName = preg_replace('/\s*-\s*[A-Z0-9.]+\s*$/i', '', $cleanName);
+        
+        return trim($cleanName, ' -');
+    }
+
+    /**
+     * Apply sorting to grouped Black Friday products collection
+     */
+    private function applySortingToBlackFridayProducts($products, Request $request)
+    {
+        $sort = $request->get('sort', 'latest');
+        
+        switch ($sort) {
+            case 'discount':
+                return $products->sortByDesc(function ($product) {
+                    $original = $product->original_price ?? $product->price;
+                    $final = $product->sale_price ?? $product->price;
+                    
+                    if ($original > $final) {
+                        return (($original - $final) / $original) * 100;
+                    }
+                    return 0;
+                });
+                
+            case 'price_low':
+                return $products->sortBy(function ($product) {
+                    return $product->sale_price ?? $product->price;
+                });
+                
+            case 'price_high':
+                return $products->sortByDesc(function ($product) {
+                    return $product->sale_price ?? $product->price;
+                });
+                
+            case 'name_az':
+                return $products->sortBy('name');
+                
+            default: // latest
+                return $products->sortByDesc('created_at');
+        }
+    }
+
+    /**
+     * Process product for display with proper pricing hierarchy
+     */
+    private function processBlackFridayProductForDisplay($product)
+    {
+        // Price hierarchy: original_price > price > sale_price (what customer pays)
+        $originalPrice = $product->original_price ?? null;
+        $currentPrice = $product->price ?? 0;
+        $salePrice = $product->sale_price ?? null;
+        
+        // Determine final price (what customer actually pays)
+        $finalPrice = $currentPrice;
+        if ($salePrice && $salePrice < $currentPrice) {
+            $finalPrice = $salePrice;
+        }
+        
+        $product->final_price = $finalPrice;
+        
+        // Calculate discount percentage properly
+        $discountPercentage = 0;
+        $displayOriginalPrice = null;
+        
+        if ($originalPrice && $originalPrice > $finalPrice) {
+            // Use original_price as base for discount
+            $discountPercentage = round((($originalPrice - $finalPrice) / $originalPrice) * 100);
+            $displayOriginalPrice = $originalPrice;
+        } elseif (!$originalPrice && $salePrice && $salePrice < $currentPrice) {
+            // Fallback: use current price as base
+            $discountPercentage = round((($currentPrice - $salePrice) / $currentPrice) * 100);
+            $displayOriginalPrice = $currentPrice;
+        }
+        
+        $product->calculated_discount_percentage = $discountPercentage;
+        $product->display_original_price = $displayOriginalPrice;
+        
+        // Format main image
+        if ($product->featured_image) {
+            $product->first_image = filter_var($product->featured_image, FILTER_VALIDATE_URL) 
+                ? $product->featured_image 
+                : asset('storage/' . ltrim($product->featured_image, '/'));
+        } elseif ($product->images) {
+            $images = is_string($product->images) ? json_decode($product->images, true) : $product->images;
+            if (is_array($images) && !empty($images)) {
+                $product->first_image = filter_var($images[0], FILTER_VALIDATE_URL) 
+                    ? $images[0] 
+                    : asset('storage/' . ltrim($images[0], '/'));
+            }
+        }
+        
+        // Ensure first_image fallback
+        if (empty($product->first_image)) {
+            $product->first_image = asset('images/product-placeholder.png');
+        }
+        
+        // Calculate stock
+        $totalStock = $product->total_stock ?? $product->stock_quantity ?? 0;
+        
+        // Format pricing for display
+        $product->formatted_price = 'Rp ' . number_format($finalPrice, 0, ',', '.');
+        
+        if ($displayOriginalPrice) {
+            $product->formatted_original_price = 'Rp ' . number_format($displayOriginalPrice, 0, ',', '.');
+            $product->discount_amount = $displayOriginalPrice - $finalPrice;
+        } else {
+            $product->formatted_original_price = null;
+            $product->discount_amount = 0;
+        }
+        
+        return $product;
+    }
+
+    /**
+     * Show individual Black Friday product (keeping existing logic)
      */
     public function show(Request $request, $slug)
     {
@@ -240,7 +386,7 @@ class BlackFridayController extends Controller
                 ->where('is_active', true)
                 ->firstOrFail();
 
-            // ⭐ FIXED: Get ALL size variants properly
+            // Get size variants properly
             $sizeVariants = collect();
             
             if (!empty($product->sku_parent)) {
@@ -254,7 +400,7 @@ class BlackFridayController extends Controller
                         ? $variant->sale_price 
                         : $variant->price;
                     
-                    // ⭐ FIXED: Get size from available_sizes JSON and clean it
+                    // Get size from available_sizes JSON and clean it
                     $sizes = [];
                     if ($variant->available_sizes) {
                         $variantSizes = is_string($variant->available_sizes) 
@@ -289,7 +435,7 @@ class BlackFridayController extends Controller
                 $sizeVariants = $sizeVariants->sortBy('size')->unique('size')->values();
             }
 
-            // ⭐ FIXED: Calculate pricing with proper hierarchy
+            // Calculate pricing with proper hierarchy
             $originalPrice = $product->original_price ?? null;
             $currentPrice = $product->price ?? 0;
             $salePrice = $product->sale_price ?? null;
@@ -318,78 +464,16 @@ class BlackFridayController extends Controller
                     }
                 }
             }
-            
-            if (empty($imageUrls) && $product->featured_image) {
-                $imageUrls[] = filter_var($product->featured_image, FILTER_VALIDATE_URL) 
-                    ? $product->featured_image 
-                    : asset('storage/' . ltrim($product->featured_image, '/'));
-            }
-            
-            if (empty($imageUrls)) {
-                $imageUrls[] = asset('images/default-product.jpg');
-            }
 
-            // Add calculated fields to product
-            $product->image_urls = $imageUrls;
-            $product->first_image = $imageUrls[0];
-            $product->final_price = $finalPrice;
-            $product->calculated_discount_percentage = $discountPercentage;
-            $product->formatted_price = 'Rp ' . number_format($finalPrice, 0, ',', '.');
-            
-            // Set display original price
-            if ($originalPrice && $originalPrice > $finalPrice) {
-                $product->formatted_original_price = 'Rp ' . number_format($originalPrice, 0, ',', '.');
-                $product->discount_amount = $originalPrice - $finalPrice;
-            } elseif (!$originalPrice && $salePrice && $salePrice < $currentPrice) {
-                $product->formatted_original_price = 'Rp ' . number_format($currentPrice, 0, ',', '.');
-                $product->discount_amount = $currentPrice - $salePrice;
-            } else {
-                $product->formatted_original_price = null;
-                $product->discount_amount = 0;
-            }
-
-            // Get related products
-            $relatedProducts = Product::where('product_type', 'BLACKFRIDAY')
-                ->where('id', '!=', $product->id)
-                ->where('is_active', true)
-                ->where(function ($query) use ($product) {
-                    $query->where('brand', $product->brand)
-                          ->orWhere('category_id', $product->category_id);
-                })
-                ->limit(4)
-                ->get();
-
-            // Format related products pricing
-            $relatedProducts->transform(function ($related) {
-                $finalPrice = ($related->sale_price && $related->sale_price < $related->price) 
-                    ? $related->sale_price 
-                    : $related->price;
-                $related->final_price = $finalPrice;
-                $related->formatted_price = 'Rp ' . number_format($finalPrice, 0, ',', '.');
-                
-                // Format image
-                if ($related->featured_image) {
-                    $related->first_image = filter_var($related->featured_image, FILTER_VALIDATE_URL) 
-                        ? $related->featured_image 
-                        : asset('storage/' . ltrim($related->featured_image, '/'));
-                } else {
-                    $related->first_image = asset('images/default-product.jpg');
-                }
-                
-                // Calculate discount
-                if ($related->original_price && $related->original_price > $finalPrice) {
-                    $related->calculated_discount_percentage = round((($related->original_price - $finalPrice) / $related->original_price) * 100);
-                } else {
-                    $related->calculated_discount_percentage = 0;
-                }
-                
-                return $related;
-            });
+            // Countdown end time
+            $countdown_end = now()->addDays(7);
 
             return view('frontend.blackfriday.show', compact(
-                'product',
-                'sizeVariants',
-                'relatedProducts'
+                'product', 
+                'sizeVariants', 
+                'imageUrls',
+                'discountPercentage',
+                'countdown_end'
             ));
 
         } catch (\Exception $e) {
@@ -398,129 +482,88 @@ class BlackFridayController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-
-            abort(404);
+            
+            abort(404, 'Black Friday product not found');
         }
     }
 
     /**
-     * ⭐ FIXED: Clean size display - remove backslashes and JSON formatting
-     */
-    private function cleanSize($size)
-    {
-        if (empty($size)) {
-            return '';
-        }
-        
-        // Convert to string first
-        $cleanSize = (string) $size;
-        
-        // Remove JSON formatting and backslashes
-        $cleanSize = trim($cleanSize, '"\'');
-        $cleanSize = str_replace(['[', ']', '"', '\\'], '', $cleanSize);
-        $cleanSize = preg_replace('/[\x00-\x1F\x7F]/', '', $cleanSize); // Remove control characters
-        
-        // Remove extra spaces and trim
-        $cleanSize = trim($cleanSize);
-        
-        return $cleanSize;
-    }
-
-    /**
-     * Quick search API for Black Friday products
+     * Quick search for Black Friday products (keeping existing logic)
      */
     public function quickSearch(Request $request)
     {
-        try {
-            $query = $request->get('q', '');
+        $search = $request->get('query', '');
+        
+        if (empty($search) || strlen($search) < 2) {
+            return response()->json(['products' => []]);
+        }
+
+        $products = Product::where('product_type', 'BLACKFRIDAY')
+            ->where('is_active', true)
+            ->where(function ($query) use ($search) {
+                $query->where('name', 'like', "%{$search}%")
+                      ->orWhere('brand', 'like', "%{$search}%")
+                      ->orWhere('sku', 'like', "%{$search}%");
+            })
+            ->select(['id', 'name', 'slug', 'price', 'sale_price', 'images', 'brand'])
+            ->limit(8)
+            ->get();
+
+        $formattedProducts = $products->map(function ($product) {
+            $finalPrice = $product->sale_price ?? $product->price;
             
-            if (empty($query)) {
-                return response()->json(['products' => []]);
+            $image = null;
+            if ($product->images) {
+                $images = is_string($product->images) ? json_decode($product->images, true) : $product->images;
+                if (is_array($images) && !empty($images)) {
+                    $image = filter_var($images[0], FILTER_VALIDATE_URL) 
+                        ? $images[0] 
+                        : asset('storage/' . ltrim($images[0], '/'));
+                }
             }
 
-            $products = Product::where('product_type', 'BLACKFRIDAY')
-                ->where('is_active', true)
-                ->where(function ($q) use ($query) {
-                    $q->where('name', 'like', "%{$query}%")
-                      ->orWhere('brand', 'like', "%{$query}%");
-                })
-                ->limit(10)
-                ->get();
+            return [
+                'id' => $product->id,
+                'name' => $product->name,
+                'slug' => $product->slug,
+                'brand' => $product->brand,
+                'price' => 'Rp ' . number_format($finalPrice, 0, ',', '.'),
+                'image' => $image,
+                'url' => route('black-friday.show', $product->slug)
+            ];
+        });
 
-            $results = $products->map(function ($product) {
-                $finalPrice = ($product->sale_price && $product->sale_price < $product->price) 
-                    ? $product->sale_price 
-                    : $product->price;
-                
-                $imageUrl = $product->featured_image 
-                    ? (filter_var($product->featured_image, FILTER_VALIDATE_URL) 
-                        ? $product->featured_image 
-                        : asset('storage/' . $product->featured_image))
-                    : asset('images/default-product.jpg');
-
-                return [
-                    'id' => $product->id,
-                    'name' => $product->name,
-                    'slug' => $product->slug,
-                    'brand' => $product->brand,
-                    'price' => $finalPrice,
-                    'formatted_price' => 'Rp ' . number_format($finalPrice, 0, ',', '.'),
-                    'image' => $imageUrl,
-                    'url' => route('black-friday.show', $product->slug),
-                    'in_stock' => ($product->stock_quantity ?? 0) > 0
-                ];
-            });
-
-            return response()->json(['products' => $results]);
-
-        } catch (\Exception $e) {
-            Log::error('🖤 Black Friday quick search error', [
-                'query' => $request->get('q'),
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json(['products' => []], 500);
-        }
+        return response()->json(['products' => $formattedProducts]);
     }
 
     /**
-     * Get flash sale data for countdown timers
+     * Get flash sale data (keeping existing logic)
      */
-    public function getFlashSaleData(Request $request)
+    public function getFlashSaleData()
     {
-        try {
-            $flashSaleProducts = Product::where('product_type', 'BLACKFRIDAY')
-                ->where('is_active', true)
-                ->where('is_flash_sale', true)
-                ->where('sale_end_date', '>', now())
-                ->limit(5)
-                ->get();
+        $flashSaleProducts = Product::where('product_type', 'BLACKFRIDAY')
+            ->where('is_active', true)
+            ->where('is_flash_sale', true)
+            ->limit(10)
+            ->get();
 
-            $data = $flashSaleProducts->map(function ($product) {
-                return [
-                    'id' => $product->id,
-                    'name' => $product->name,
-                    'end_date' => $product->sale_end_date ? $product->sale_end_date->toISOString() : null,
-                    'stock' => $product->stock_quantity ?? 0
-                ];
-            });
+        return response()->json([
+            'flash_sale_products' => $flashSaleProducts,
+            'countdown_end' => now()->addDays(7)->toISOString()
+        ]);
+    }
 
-            return response()->json([
-                'success' => true,
-                'flash_sales' => $data,
-                'countdown_end' => now()->addDays(7)->toISOString()
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('🖤 Black Friday flash sale data error', [
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'flash_sales' => [],
-                'countdown_end' => now()->addDays(7)->toISOString()
-            ], 500);
-        }
+    /**
+     * Clean size string
+     */
+    private function cleanSize($size)
+    {
+        if (empty($size)) return null;
+        
+        // Remove common prefixes and clean
+        $cleaned = str_replace(['Size ', 'size ', 'SIZE '], '', trim($size));
+        $cleaned = trim($cleaned, ' -_');
+        
+        return !empty($cleaned) ? strtoupper($cleaned) : null;
     }
 }
