@@ -8,6 +8,8 @@ use App\Services\MidtransService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Barryvdh\DomPDF\Facade\Pdf;
+
 
 class OrderController extends Controller
 {
@@ -595,4 +597,38 @@ class OrderController extends Controller
             ], 500);
         }
     }
+    public function print($orderNumber)
+{
+try {
+$order = Order::with(['orderItems.product'])
+->where('order_number', $orderNumber)
+->firstOrFail();
+
+
+Log::info('Admin PDF order print triggered', [
+'order_number' => $order->order_number,
+'origin' => 'admin-panel',
+]);
+
+
+$pdf = Pdf::loadView('frontend.orders.print', compact('order'))
+->setPaper('A5', 'portrait');
+
+
+return $pdf->download('order-' . $order->order_number . '.pdf');
+
+
+} catch (\Exception $e) {
+Log::error('Error printing order: ' . $e->getMessage(), [
+'order_number' => $orderNumber,
+'trace' => $e->getTraceAsString(),
+]);
+
+
+return response()->json([
+'success' => false,
+'message' => 'Failed to generate print file.'
+], 500);
+}
+}
 }

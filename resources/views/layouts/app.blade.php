@@ -352,7 +352,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <!-- Menu tanpa dropdown -->
         <a href="/products?category=accessories" class="mobile-menu-item">ACCESSORIES</a>
         <a href="/products?sale=true" class="mobile-menu-item special">SALE</a>
-        <a href="{{ route('black-friday.index') }}" class="mobile-menu-item special">BLACK FRIDAY</a>
+        {{-- <a href="{{ route('black-friday.index') }}" class="mobile-menu-item special">BLACK FRIDAY</a> --}}
         
         @auth
             <!-- My Account Section -->
@@ -841,11 +841,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         SALE
                     </a>
                 </div>
-                <div class="nav-item-container">
+                {{-- <div class="nav-item-container">
     <a href="{{ route('black-friday.index') }}" class="nav-simple-link special">
         BLACK FRIDAY
     </a>
-</div>
+</div> --}}
             </div>
         </div>
     </header>
@@ -945,9 +945,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <a href="/products?sale=true" class="px-4 py-2 text-red-600 font-bold text-sm whitespace-nowrap hover:bg-red-50 transition-colors">
                 SALE
             </a>
-                        <a href="{{ route('black-friday.index') }}" class="px-4 py-2 text-red-600 font-bold text-sm whitespace-nowrap hover:bg-red-50 transition-colors">
+                        {{-- <a href="{{ route('black-friday.index') }}" class="px-4 py-2 text-red-600 font-bold text-sm whitespace-nowrap hover:bg-red-50 transition-colors">
                 BLACK FRIDAY
-            </a>
+            </a> --}}
         </div>
     </div>
 </div>
@@ -974,12 +974,10 @@ function mobileMenuDropdown() {
     <div class="carousel-container">
         <template x-for="(slide, index) in slides" :key="index">
             <div class="carousel-slide" :class="{ 'active': currentSlide === index }">
-                <!-- Use desktop image as default, will be updated by JavaScript -->
-                <img :src="slide.desktop" 
-                     :alt="slide.description" 
-                     loading="lazy"
-                     @load="updateImageSources()">
-            </div>
+    {{-- <a href="{{ route('black-friday.index') }}" class="block w-full h-full"> --}}
+        <img :src="slide.desktop" :alt="slide.description" loading="lazy" class="w-full h-full object-cover">
+    </a>
+</div>
         </template>
         
         <!-- Navigation arrows (jika lebih dari 1 slide) -->

@@ -220,6 +220,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/orders/{orderNumber}', [OrderController::class, 'show'])->name('orders.show');
     Route::post('/orders/{orderNumber}/cancel', [OrderController::class, 'cancel'])->name('orders.cancel');
     Route::get('/orders/{orderNumber}/invoice', [OrderController::class, 'invoice'])->name('orders.invoice');
+    Route::get('/orders/{orderNumber}/print', [OrderController::class, 'print'])->name('orders.print');
     
     // Wishlist
     Route::prefix('wishlist')->name('wishlist.')->group(function () {
@@ -555,24 +556,24 @@ Route::get('/promo/onedecade/finish', function () {
     return view('frontend.promo.onedecade_finish');
 })->name('promo.onedecade.finish');
 
-// =====================================
-// BLACK FRIDAY ROUTES
-// =====================================
+// // =====================================
+// // BLACK FRIDAY ROUTES
+// // =====================================
 
-// Frontend Black Friday Routes
-Route::prefix('black-friday')->name('black-friday.')->group(function () {
-    Route::get('/', [\App\Http\Controllers\Frontend\BlackFridayController::class, 'index'])->name('index');
-    Route::get('/{product:slug}', [\App\Http\Controllers\Frontend\BlackFridayController::class, 'show'])->name('show');
-});
+// // Frontend Black Friday Routes
+// Route::prefix('black-friday')->name('black-friday.')->group(function () {
+//     Route::get('/', [\App\Http\Controllers\Frontend\BlackFridayController::class, 'index'])->name('index');
+//     Route::get('/{product:slug}', [\App\Http\Controllers\Frontend\BlackFridayController::class, 'show'])->name('show');
+// });
 
-// API Routes for Black Friday
-Route::prefix('api/black-friday')->name('api.black-friday.')->group(function() {
-    Route::get('/search', [\App\Http\Controllers\Frontend\BlackFridayController::class, 'quickSearch'])->name('search');
-    Route::get('/flash-sale-data', [\App\Http\Controllers\Frontend\BlackFridayController::class, 'getFlashSaleData'])->name('flash-sale-data');
-});
+// // API Routes for Black Friday
+// Route::prefix('api/black-friday')->name('api.black-friday.')->group(function() {
+//     Route::get('/search', [\App\Http\Controllers\Frontend\BlackFridayController::class, 'quickSearch'])->name('search');
+//     Route::get('/flash-sale-data', [\App\Http\Controllers\Frontend\BlackFridayController::class, 'getFlashSaleData'])->name('flash-sale-data');
+// });
 
-// Black Friday Cart Integration Routes
-Route::post('/cart/add-black-friday/{product:slug}', [\App\Http\Controllers\Frontend\CartController::class, 'addBlackFridayProduct'])->name('cart.add-black-friday');
+// // Black Friday Cart Integration Routes
+// Route::post('/cart/add-black-friday/{product:slug}', [\App\Http\Controllers\Frontend\CartController::class, 'addBlackFridayProduct'])->name('cart.add-black-friday');
 
 // Apple Authentication Routes (placeholder implementation)
 Route::get('/auth/apple', function() {

@@ -10,6 +10,9 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use pxlrbt\FilamentExcel\Actions\Tables\ExportAction as ExcelExportAction;
+use pxlrbt\FilamentExcel\Exports\ExcelExport;
+
 
 class OrderResource extends Resource
 {
@@ -28,7 +31,7 @@ class OrderResource extends Resource
                         Forms\Components\TextInput::make('order_number')
                             ->required()
                             ->maxLength(100)
-                            ->disabled(), // Order number tidak boleh diubah
+                            ->disabled(),
                         
                         Forms\Components\Select::make('user_id')
                             ->relationship('user', 'name')
@@ -55,7 +58,6 @@ class OrderResource extends Resource
                     ])
                     ->columns(2),
 
-                // UPDATED: Single Status Section
                 Forms\Components\Section::make('Order Status')
                     ->schema([
                         Forms\Components\Select::make('status')
@@ -77,7 +79,7 @@ class OrderResource extends Resource
                         Forms\Components\TextInput::make('payment_method')
                             ->maxLength(255)
                             ->label('Payment Method')
-                            ->disabled(), // Read-only field
+                            ->disabled(),
                             
                         Forms\Components\Placeholder::make('status_info')
                             ->label('Status Information')
@@ -107,7 +109,7 @@ class OrderResource extends Resource
                             ->numeric()
                             ->prefix('Rp')
                             ->step(0.01)
-                            ->disabled(), // Calculated field
+                            ->disabled(),
                             
                         Forms\Components\TextInput::make('tax_amount')
                             ->required()
@@ -115,7 +117,7 @@ class OrderResource extends Resource
                             ->prefix('Rp')
                             ->step(0.01)
                             ->default(0)
-                            ->disabled(), // Calculated field
+                            ->disabled(),
                             
                         Forms\Components\TextInput::make('shipping_cost')
                             ->required()
@@ -136,7 +138,7 @@ class OrderResource extends Resource
                             ->numeric()
                             ->prefix('Rp')
                             ->step(0.01)
-                            ->disabled(), // Calculated field
+                            ->disabled(),
                             
                         Forms\Components\TextInput::make('currency')
                             ->required()
@@ -225,7 +227,6 @@ class OrderResource extends Resource
                             ->placeholder('Any special notes for this order...')
                             ->columnSpanFull(),
                             
-                        // UPDATED: Payment Response Display
                         Forms\Components\Placeholder::make('payment_info')
                             ->label('Payment Information')
                             ->content(function ($record) {
@@ -259,7 +260,6 @@ class OrderResource extends Resource
                             ->columnSpanFull(),
                     ]),
 
-                // NEW: Order Items Section
                 Forms\Components\Section::make('Order Items')
                     ->schema([
                         Forms\Components\Placeholder::make('order_items_display')
@@ -278,18 +278,15 @@ class OrderResource extends Resource
                                 foreach ($orderItems as $item) {
                                     $itemInfo = [];
                                     
-                                    // Basic item info from order_items table
                                     $itemInfo[] = "📦 " . $item->product_name;
                                     $itemInfo[] = "   SKU: " . ($item->product_sku ?: 'N/A');
                                     $itemInfo[] = "   Quantity: " . $item->quantity;
                                     $itemInfo[] = "   Price: Rp " . number_format($item->product_price, 0, ',', '.');
                                     $itemInfo[] = "   Total: Rp " . number_format($item->total_price, 0, ',', '.');
                                     
-                                    // Product details from products table (if product still exists)
                                     if ($item->product) {
                                         $product = $item->product;
                                         
-                                        // Available sizes from products table
                                         if ($product->available_sizes) {
                                             $sizes = is_array($product->available_sizes) 
                                                 ? $product->available_sizes 
@@ -300,7 +297,6 @@ class OrderResource extends Resource
                                             }
                                         }
                                         
-                                        // Additional product info
                                         if ($product->brand) {
                                             $itemInfo[] = "   Brand: " . $product->brand;
                                         }
@@ -334,10 +330,22 @@ class OrderResource extends Resource
                     ]),
             ]);
     }
-
     public static function table(Table $table): Table
     {
         return $table
+            // ✅ OPTIMASI: Eager Loading dengan error handling
+            ->modifyQueryUsing(function (Builder $query) {
+                return $query
+                    ->with([
+                        'orderItems' => function ($query) {
+                            $query->select('id', 'order_id', 'product_id', 'product_name', 'product_sku')
+                                  ->with(['product' => function ($q) {
+                                      $q->select('id', 'available_sizes');
+                                  }])
+                                  ->limit(1);
+                        }
+                    ]);
+            })
             ->columns([
                 Tables\Columns\TextColumn::make('order_number')
                     ->searchable()
@@ -353,9 +361,101 @@ class OrderResource extends Resource
                 Tables\Columns\TextColumn::make('customer_email')
                     ->searchable()
                     ->label('Email')
-                    ->limit(30),
+                    ->limit(30)
+                    ->copyable(),
                     
-                // UPDATED: Single Status Column with Icons
+                Tables\Columns\TextColumn::make('customer_phone')
+                    ->searchable()
+                    ->label('Phone')
+                    ->copyable()
+                    ->placeholder('—'),
+                    
+                Tables\Columns\TextColumn::make('shipping_address')
+                    ->label('Shipping Address')
+                    ->limit(50)
+                    ->wrap()
+                    ->getStateUsing(function (Order $record) {
+                        if (!$record->shipping_address) {
+                            return '-';
+                        }
+                        
+                        // Jika shipping_address adalah JSON array
+                        if (is_array($record->shipping_address)) {
+                            return implode(', ', $record->shipping_address);
+                        }
+                        
+                        // Jika string biasa
+                        return $record->shipping_address;
+                    })
+                    ->searchable(false)
+                    ->tooltip(function (Order $record) {
+                        if (!$record->shipping_address) {
+                            return null;
+                        }
+                        
+                        if (is_array($record->shipping_address)) {
+                            return implode("\n", $record->shipping_address);
+                        }
+                        
+                        return $record->shipping_address;
+                    }),
+
+                // ✅ OPTIMIZED: Produk + Size (dengan eager loading optimal)
+                Tables\Columns\TextColumn::make('product_name_first')
+                    ->label('Produk')
+                    ->getStateUsing(function (Order $record) {
+                        // Gunakan relasi yang sudah di-eager load
+                        $item = $record->orderItems->first();
+                        if (!$item) {
+                            return '-';
+                        }
+
+                        $name = $item->product_name;
+
+                        // Ambil size dari product jika ada
+                        if ($item->product && $item->product->available_sizes) {
+                            $sizes = is_array($item->product->available_sizes)
+                                ? $item->product->available_sizes
+                                : json_decode($item->product->available_sizes, true);
+
+                            if (is_array($sizes) && count($sizes) > 0) {
+                                // Ambil size pertama saja
+                                $name .= ' - Size ' . $sizes[0];
+                            }
+                        }
+
+                        return $name;
+                    })
+                    ->limit(60)
+                    ->wrap()
+                    ->searchable(false), // Disable search untuk performa
+
+                // ✅ OPTIMIZED: SKU
+                Tables\Columns\TextColumn::make('product_sku_first')
+                    ->label('SKU')
+                    ->getStateUsing(function (Order $record) {
+                        return optional($record->orderItems->first())->product_sku ?? '-';
+                    })
+                    ->limit(30)
+                    ->wrap()
+                    ->searchable(false),
+
+                // ✅ OPTIMIZED: Shipping dengan cache regex
+                Tables\Columns\TextColumn::make('shipping')
+                    ->label('Shipping')
+                    ->getStateUsing(function (Order $record) {
+                        if (empty($record->notes)) {
+                            return 'N/A';
+                        }
+
+                        if (preg_match('/Shipping:\s*(\w+)\s+(\w+)/i', $record->notes, $matches)) {
+                            return $matches[1] . ' - ' . $matches[2];
+                        }
+
+                        return 'N/A';
+                    })
+                    ->searchable(false),
+                    
                 Tables\Columns\BadgeColumn::make('status')
                     ->colors([
                         'warning' => 'pending',
@@ -410,7 +510,7 @@ class OrderResource extends Resource
                     ->sortable()
                     ->label('Order Date'),
                     
-                // NEW: Add items count column
+                // ✅ OPTIMIZED: Items count dengan withCount
                 Tables\Columns\TextColumn::make('order_items_count')
                     ->counts('orderItems')
                     ->label('Items')
@@ -418,7 +518,6 @@ class OrderResource extends Resource
                     ->color('primary'),
             ])
             ->filters([
-                // UPDATED: Single Status Filter
                 Tables\Filters\SelectFilter::make('status')
                     ->options([
                         'pending' => '⏳ Pending',
@@ -457,11 +556,32 @@ class OrderResource extends Resource
                             );
                     }),
             ])
+            ->headerActions([
+                ExcelExportAction::make('export_paid')
+                    ->label('Export Paid')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('primary')
+                    ->exports([
+                        ExcelExport::make('paid-orders')
+                            ->fromTable()
+                            ->modifyQueryUsing(
+                                fn (Builder $query) => $query->where('status', 'paid')
+                            )
+                            ->askForFilename()
+                            ->askForWriterType()
+                    ]),
+            ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
+
+                Tables\Actions\Action::make('print_order')
+                    ->label('Print Order')
+                    ->icon('heroicon-o-printer')
+                    ->color('gray')
+                    ->url(fn (Order $record) => route('orders.print', ['orderNumber' => $record->order_number]), true)
+                    ->openUrlInNewTab(),
                 
-                // UPDATED: Status Transition Actions
                 Tables\Actions\Action::make('mark_paid')
                     ->label('Mark Paid')
                     ->icon('heroicon-o-check-circle')
@@ -533,7 +653,6 @@ class OrderResource extends Resource
                             ->placeholder('Please provide a reason for cancellation...'),
                     ])
                     ->action(function (Order $record, array $data) {
-                        // Restore stock for cancelled orders
                         foreach ($record->orderItems as $item) {
                             $product = \App\Models\Product::find($item->product_id);
                             if ($product) {
@@ -541,7 +660,6 @@ class OrderResource extends Resource
                             }
                         }
                         
-                        // Add cancellation note
                         $note = "[" . now()->format('Y-m-d H:i:s') . "] Order cancelled: " . $data['cancellation_reason'];
                         $existingNotes = $record->notes ? $record->notes . "\n" : '';
                         
@@ -558,7 +676,6 @@ class OrderResource extends Resource
                     Tables\Actions\DeleteBulkAction::make()
                         ->requiresConfirmation(),
                     
-                    // UPDATED: Bulk Status Actions
                     Tables\Actions\BulkAction::make('bulk_mark_paid')
                         ->label('Mark as Paid')
                         ->icon('heroicon-o-check-circle')
@@ -600,7 +717,6 @@ class OrderResource extends Resource
                         ->action(function ($records, array $data) {
                             $records->each(function($record) use ($data) {
                                 if (in_array($record->status, ['pending', 'paid', 'processing'])) {
-                                    // Restore stock
                                     foreach ($record->orderItems as $item) {
                                         $product = \App\Models\Product::find($item->product_id);
                                         if ($product) {
@@ -608,7 +724,6 @@ class OrderResource extends Resource
                                         }
                                     }
                                     
-                                    // Add cancellation note
                                     $note = "[" . now()->format('Y-m-d H:i:s') . "] Bulk cancellation: " . $data['cancellation_reason'];
                                     $existingNotes = $record->notes ? $record->notes . "\n" : '';
                                     
@@ -624,14 +739,16 @@ class OrderResource extends Resource
                 ]),
             ])
             ->defaultSort('created_at', 'desc')
-            ->poll('30s'); // Auto refresh every 30 seconds
+            ->deferLoading() // ✅ OPTIMASI: Load data setelah halaman siap
+            ->persistFiltersInSession() // ✅ OPTIMASI: Simpan filter di session
+            ->persistSortInSession() // ✅ OPTIMASI: Simpan sort di session
+            ->persistSearchInSession() // ✅ OPTIMASI: Simpan search di session
+            ->poll(null); // ✅ OPTIMASI: Disable auto-refresh untuk performa lebih baik
     }
 
     public static function getRelations(): array
     {
-        return [
-            // OrderItemsRelationManager::class, // Will be added later if needed
-        ];
+        return [];
     }
 
     public static function getPages(): array
@@ -644,7 +761,6 @@ class OrderResource extends Resource
         ];
     }
 
-    // UPDATED: Navigation Badge for Single Status
     public static function getNavigationBadge(): ?string
     {
         $pendingCount = static::getModel()::where('status', 'pending')->count();
@@ -661,15 +777,14 @@ class OrderResource extends Resource
         $paidCount = static::getModel()::where('status', 'paid')->count();
         
         if ($pendingCount > 0) {
-            return 'warning'; // Pending orders need attention
+            return 'warning';
         } elseif ($paidCount > 0) {
-            return 'success'; // Paid orders ready for processing
+            return 'success';
         }
         
         return 'primary';
     }
 
-    // UPDATED: Additional Methods for Single Status System
     public static function getNavigationBadgeTooltip(): ?string
     {
         $pendingCount = static::getModel()::where('status', 'pending')->count();
@@ -688,7 +803,6 @@ class OrderResource extends Resource
         return empty($tooltips) ? null : implode(', ', $tooltips);
     }
 
-    // Widget Data for Dashboard
     public static function getStatusStats(): array
     {
         return static::getModel()::selectRaw('status, COUNT(*) as count')
