@@ -466,22 +466,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <div class="mobile-submenu-content">
             <h2 class="mobile-submenu-title">Brand</h2>
             <a href="/products?brands[]=Adidas" class="mobile-submenu-item-large">ADIDAS</a>
+            <a href="/products?brands[]=Nike" class="mobile-submenu-item-large">NIKE</a>
             <a href="/products?brands[]=Air+Jordan" class="mobile-submenu-item-large">AIR JORDAN</a>
             <a href="/products?brands[]=Asics" class="mobile-submenu-item-large">ASICS</a>
             <a href="/products?brands[]=Converse" class="mobile-submenu-item-large">CONVERSE</a>
-            <a href="/products?brands[]=Crep" class="mobile-submenu-item-large">CREP</a>
             <a href="/products?brands[]=Crocs" class="mobile-submenu-item-large">CROCS</a>
-            <a href="/products?brands[]=Diadora" class="mobile-submenu-item-large">DIADORA</a>
             <a href="/products?brands[]=Hoka" class="mobile-submenu-item-large">HOKA</a>
             <a href="/products?brands[]=New+Balance" class="mobile-submenu-item-large">NEW BALANCE</a>
-            <a href="/products?brands[]=New+Era" class="mobile-submenu-item-large">NEW ERA</a>
-            <a href="/products?brands[]=Nike" class="mobile-submenu-item-large">NIKE</a>
-            <a href="/products?brands[]=Onitsuka+Tiger" class="mobile-submenu-item-large">ONITSUKA TIGER</a>
             <a href="/products?brands[]=Puma" class="mobile-submenu-item-large">PUMA</a>
             <a href="/products?brands[]=Reebok" class="mobile-submenu-item-large">REEBOK</a>
-            <a href="/products?brands[]=Salomon" class="mobile-submenu-item-large">SALOMON</a>
             <a href="/products?brands[]=Skechers" class="mobile-submenu-item-large">SKECHERS</a>
-            <a href="/products?brands[]=Umbro" class="mobile-submenu-item-large">UMBRO</a>
+            <a href="/products?brands[]=On" class="mobile-submenu-item-large">ON</a>
+            <a href="/products?brands[]=Other" class="mobile-submenu-item-large">OTHER</a>
+            
+
             <a href="/products?brands[]=Vans" class="mobile-submenu-item-large">VANS</a>
         </div>
     </div>
@@ -534,22 +532,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <i class="fas fa-search"></i>
   <span class="search-text">Search</span>
 </button>
-
-
-
-        <!-- Cart Button -->
-            <a href="{{ route('cart.index') }}" class="icon-btn mobile-cart-hidden" title="Shopping Cart">
-            <i class="fas fa-shopping-cart"></i>
-            @php
-                $cartCount = count(session('cart', []));
-            @endphp
-            @if($cartCount > 0)
-                <span class="icon-badge" id="cartCount">{{ $cartCount }}</span>
-            @else
-                <span class="icon-badge" id="cartCount" style="display: none;">0</span>
-            @endif
-        </a>
-    </div>
+</div>
 </div>
         <!-- DESKTOP LAYOUT: Logo - Search - User Menu (TETAP SAMA) -->
         <div class="hidden md:flex items-center justify-between w-full">
@@ -561,7 +544,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </div>
 
             <!-- Desktop Search Bar -->
-<div class="flex-1 max-w-2xl mx-8">
+<div class="hidden md:flex flex-1 max-w-2xl mx-8">
+
     <form action="{{ route('search') }}" method="GET" class="w-full ka-search-custom mx-auto">
         {{-- Hidden input untuk maintain filter lain jika ada (opsional) --}}
         @if(request()->hasAny(['category', 'brands', 'min_price', 'max_price', 'sort']))
@@ -576,13 +560,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             @endforeach
         @endif
         
-        <div class="ka-search-container">
+<div class="ka-search-container">
             <div class="relative flex items-center">
-                <i class="fas fa-search ka-search-icon"></i>
                 <input type="text" 
-                       name="q"  {{-- ⭐ UBAH: name="q" untuk query utama --}}
+                       name="q"
                        placeholder="Type any products here"
-                       value="{{ request('q') }}"  {{-- ⭐ UBAH: value dari request('q') --}}
+                       value="{{ request('q') }}"
                        class="ka-search-input flex-1">
                 <button type="submit" class="ka-search-btn">
                     <i class="fas fa-search"></i>
@@ -784,8 +767,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         
         <!-- Kolom 3 -->
         <div class="brand-column">
-            <a href="/products?brands[]=Jordan" class="dropdown-item">
-                <i class="fas fa-nike mr-2"></i>JORDAN
+            <a href="/products?brands[]=Air+Jordan" class="dropdown-item">
+                <i class="fas fa-nike mr-2"></i>Air JORDAN
             </a>
             <a href="/products?brands[]=Reebok" class="dropdown-item">
                 <i class="fas fa-nike mr-2"></i>REEBOK
@@ -797,14 +780,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         
         <!-- Kolom 4 -->
         <div class="brand-column">
-            <a href="/products?brands[]=Under Armour" class="dropdown-item">
-                <i class="fas fa-nike mr-2"></i>UNDER ARMOUR
-            </a>
             <a href="/products?brands[]=Skechers" class="dropdown-item">
                 <i class="fas fa-nike mr-2"></i>SKECHERS
             </a>
-            <a href="/products?brands[]=Fila" class="dropdown-item">
-                <i class="fas fa-nike mr-2"></i>FILA
+                <a href="/products?brands[]=On" class="dropdown-item">
+                <i class="fas fa-nike mr-2"></i>ON
+            </a>
+            <a href="/products?brands[]=Other" class="dropdown-item">
+                <i class="fas fa-nike mr-2"></i>Other
             </a>
         </div>
     </div>
@@ -853,15 +836,17 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- Mobile Search Dropdown (tampil saat button diklik) -->
 <!-- Mobile Search Overlay (FULL SCREEN) -->
 <!-- Mobile Search Overlay (slide-in from right) -->
-<!-- Mobile Search Overlay (FULL SCREEN) -->
+<!-- Mobile Search Overlay (FULL SCREEN) - FIXED -->
+<!-- Mobile Search Overlay (FULL SCREEN) - FIXED -->
 <div class="fixed inset-0 z-[100] md:hidden bg-white"
      x-data
      x-show="$store.ui.showMobileSearch"
      x-transition
      x-trap="$store.ui.showMobileSearch"
      @keydown.escape.window="$store.ui.showMobileSearch = false"
-     x-init="$watch(() => $store.ui.showMobileSearch, v => v && $nextTick(() => $el.querySelector('input[name=search]')?.focus()))"
+     x-init="$watch(() => $store.ui.showMobileSearch, v => v && $nextTick(() => $el.querySelector('input[name=q]')?.focus()))"
      style="display:none;">
+  
   <!-- Header overlay -->
   <div class="p-5 flex items-center justify-between border-b">
     <h2 class="text-xl font-semibold">Search</h2>
@@ -869,38 +854,37 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   </div>
 
   <!-- Body overlay -->
-<div class="p-5">
+  <div class="p-5">
     <form action="{{ route('search') }}" method="GET">
-        {{-- Hidden input untuk maintain filter lain jika ada (opsional) --}}
-        @if(request()->hasAny(['category', 'brands', 'min_price', 'max_price', 'sort']))
-            @foreach(request()->only(['category', 'brands', 'min_price', 'max_price', 'sort']) as $key => $value)
-                @if(is_array($value))
-                    @foreach($value as $val)
-                        <input type="hidden" name="{{ $key }}[]" value="{{ $val }}">
-                    @endforeach
-                @else
-                    <input type="hidden" name="{{ $key }}" value="{{ $value }}">
-                @endif
+      {{-- Hidden input untuk maintain filter lain jika ada (opsional) --}}
+      @if(request()->hasAny(['category', 'brands', 'min_price', 'max_price', 'sort']))
+        @foreach(request()->only(['category', 'brands', 'min_price', 'max_price', 'sort']) as $key => $value)
+          @if(is_array($value))
+            @foreach($value as $val)
+              <input type="hidden" name="{{ $key }}[]" value="{{ $val }}">
             @endforeach
-        @endif
-        
+          @else
+            <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+          @endif
+        @endforeach
+      @endif
+      
       <div class="ka-search-container">
         <div class="relative flex items-center">
-          <i class="fas fa-search ka-search-icon"></i>
           <input type="text" 
-                 name="q"  {{-- ⭐ UBAH: name="q" untuk query utama --}}
+                 name="q"
                  placeholder="Type any products here"
-                 value="{{ request('q') }}"  {{-- ⭐ UBAH: value dari request('q') --}}
-                 class="ka-search-input flex-1" autofocus>
+                 value="{{ request('q') }}"
+                 class="ka-search-input flex-1" 
+                 autofocus>
           <button type="submit" class="ka-search-btn">
             <i class="fas fa-search"></i>
           </button>
         </div>
       </div>
     </form>
+  </div>
 </div>
-</div>
-
 
     <!-- Mobile Cart & Wishlist (tampil di mobile) -->
     <!-- Mobile Menu dengan Dropdown -->
@@ -1130,7 +1114,7 @@ function mobileMenuDropdown() {
 
 <!-- WhatsApp Floating Button -->
 <div id="whatsapp-button" class="whatsapp-float-btn">
-    <a href="https://wa.me/6281313911391?text=Halo%20SneakerFlash!%20Saya%20ingin%20bertanya%20tentang%20produk%20sneakers" 
+    <a href="https://wa.me/6281313911391?text=Halo%20Sneakers%20Flash!%20Saya%20ingin%20bertanya%20tentang%20produk%20sneakers" 
        target="_blank" 
        rel="noopener noreferrer"
        class="whatsapp-btn-link">

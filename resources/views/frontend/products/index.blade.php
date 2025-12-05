@@ -7,22 +7,35 @@
     <section class="bg-white py-6 border-b border-gray-200">
         <div class="container mx-auto px-4">
             <nav class="text-sm mb-4">
-                <ol class="flex space-x-2 text-gray-600">
-                    <li><a href="/" class="hover:text-blue-600">Home</a></li>
-                    <li>/</li>
-                    @if(request('category'))
-                        <li><a href="{{ route('products.index') }}" class="hover:text-blue-600">Products</a></li>
-                        <li>/</li>
-                        <li class="text-gray-900 uppercase">{{ strtoupper(request('category')) }}</li>
-                        @if(request('type'))
-                            <li>/</li>
-                            <li class="text-gray-900 capitalize">{{ ucfirst(str_replace('_', ' ', request('type'))) }}</li>
-                        @endif
-                    @else
-                        <li class="text-gray-900">Products</li>
-                    @endif
-                </ol>
-            </nav>     
+    <ol class="flex space-x-2 text-gray-600">
+        <li><a href="/" class="hover:text-blue-600">Home</a></li>
+        <li>/</li>
+
+        @if(request('category'))
+            <li><a href="{{ route('products.index') }}" class="hover:text-blue-600">Products</a></li>
+            <li>/</li>
+            <li class="text-gray-900 uppercase">{{ strtoupper(request('category')) }}</li>
+
+            @if(request('type'))
+                <li>/</li>
+                <li class="text-gray-900 capitalize">
+                    {{ ucfirst(str_replace('_', ' ', request('type'))) }}
+                </li>
+            @endif
+
+        @else
+            <li><a href="{{ route('products.index') }}" class="hover:text-blue-600">Products</a></li>
+
+            @if(request()->has('brands'))
+                <li>/</li>
+                <li class="text-gray-900 capitalize">
+                    {{ implode(', ', array_map('ucwords', request('brands'))) }}
+                </li>
+            @endif
+        @endif
+    </ol>
+</nav>
+     
         </div>
     </section>
 

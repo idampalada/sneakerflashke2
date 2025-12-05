@@ -739,11 +739,8 @@ class OrderResource extends Resource
                 ]),
             ])
             ->defaultSort('created_at', 'desc')
-            ->deferLoading() // ✅ OPTIMASI: Load data setelah halaman siap
-            ->persistFiltersInSession() // ✅ OPTIMASI: Simpan filter di session
-            ->persistSortInSession() // ✅ OPTIMASI: Simpan sort di session
-            ->persistSearchInSession() // ✅ OPTIMASI: Simpan search di session
-            ->poll(null); // ✅ OPTIMASI: Disable auto-refresh untuk performa lebih baik
+            ->striped()
+            ->poll(null);
     }
 
     public static function getRelations(): array

@@ -439,16 +439,26 @@ class ProductController extends Controller
             }
         }
 
-        if ($request->filled('brands')) {
-            $brands = $request->brands;
-            if (!is_array($brands)) {
-                $brands = [$brands];
+if ($request->filled('brands')) {
+    $brands = $request->brands;
+
+    if (!is_array($brands)) {
+        $brands = [$brands];
+    }
+
+    $brands = array_filter($brands);
+
+    if (!empty($brands)) {
+        // gunakan ILIKE supaya tidak case sensitive
+        $query->where(function ($q) use ($brands) {
+            foreach ($brands as $brand) {
+                $q->orWhere('brand', 'ILIKE', $brand);
             }
-            $brands = array_filter($brands);
-            if (!empty($brands)) {
-                $query->whereIn('brand', $brands);
-            }
-        }
+        });
+    }
+}
+
+
 
         if ($request->filled('sale') && $request->sale == 'true') {
             $query->whereNotNull('sale_price')->whereRaw('sale_price < price');

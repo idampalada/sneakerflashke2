@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "2ea989875340d6bdd8f40697c43eb0e5",
+    "content-hash": "a7c5b07215a2d3399079c305ae92947c",
     "packages": [
         {
             "name": "anourvalar/eloquent-serialize",
@@ -1590,13 +1590,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/filamentphp/panels/zipball/b060d2d01a969e3b6541ab4f1e24c745352f51c1",
                 "reference": "b060d2d01a969e3b6541ab4f1e24c745352f51c1",
-                "shasum": "",
-                "mirrors": [
-                    {
-                        "url": "https://mirrors.aliyun.com/composer/dists/%package%/%reference%.%type%",
-                        "preferred": true
-                    }
-                ]
+                "shasum": ""
             },
             "require": {
                 "danharrin/livewire-rate-limiting": "^0.3|^1.0|^2.0",
