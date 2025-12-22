@@ -1727,14 +1727,16 @@ async function calculateShipping() {
         return;
     }
 
-    const requestData = {
-        destination_id: destinationId, // ✅ FIXED: Gunakan ID yang pasti valid
-        destination_label:
-            selectedDestination.label ||
-            selectedDestination.full_address ||
-            `${selectedDestination.subdistrict_name}, ${selectedDestination.city_name}`,
-        weight: totalWeight,
-    };
+const requestData = {
+    destination_id: destinationId,
+    destination_label: selectedDestination.label || "",
+    weight: totalWeight,
+    city_name: selectedDestination.city_name || "",
+    subdistrict_name: selectedDestination.subdistrict_name || "",
+    province_name: selectedDestination.province_name || "",
+    postal_code: selectedDestination.postal_code || "",
+    street_address: document.getElementById('street_address')?.value || ""
+};
 
     console.log("📦 Shipping request data:", requestData);
     console.log("🎯 destination_id being sent:", destinationId); // TAMBAHAN: Debug log
@@ -1744,7 +1746,7 @@ async function calculateShipping() {
         ?.getAttribute("content");
 
     try {
-        const response = await fetch("/checkout/calculate-shipping", {
+        const response = await fetch("/checkout/calculate-shipping-komerce", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

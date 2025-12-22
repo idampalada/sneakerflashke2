@@ -119,8 +119,7 @@
                                 $totalStock = $product->total_stock ?? 0;
                             @endphp
                             
-                            <div class="product-card bg-white rounded-2xl overflow-hidden border border-gray-100 hover:shadow-lg transition-all duration-300 group h-full max-h-[540px] flex flex-col"
-
+                            <div class="product-card {{ $totalStock <= 0 ? 'out-of-stock' : '' }} bg-white rounded-2xl overflow-hidden border border-gray-100 hover:shadow-lg transition-all duration-300 group h-full max-h-[540px] flex flex-col"
      data-product-id="{{ $product->id ?? '' }}"
      data-sku-parent="{{ $product->sku_parent ?? '' }}"
      data-product-name="{{ $cleanProductName }}">
@@ -959,6 +958,43 @@ function hideToast() {
     .text-blue-600 { color: #2563eb; }
     .text-blue-700 { color: #1d4ed8; }
     .text-blue-900 { color: #1e3a8a; }
+    /* Out of Stock Card Dimmed Effect */
+.product-card.out-of-stock {
+    opacity: 0.5;
+    position: relative;
+}
+
+.product-card.out-of-stock::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.15);
+    z-index: 1;
+    pointer-events: none;
+    border-radius: 1rem;
+}
+
+.product-card.out-of-stock img {
+    filter: grayscale(80%) brightness(0.85) !important;
+}
+
+.product-card.out-of-stock:hover {
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.product-card.out-of-stock:hover img {
+    transform: scale(1) !important;
+}
+
+/* Ensure all child elements respect the dimming */
+.product-card.out-of-stock * {
+    position: relative;
+    z-index: 2;
+}
 
     /* Toast Animation */
     @keyframes slideInRight {

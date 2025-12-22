@@ -9,15 +9,268 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Services\KomerceOrderService;
+use App\Services\KomerceShippingService;
 
 
 class OrderController extends Controller
 {
-    private $midtransService;
-
-    public function __construct(MidtransService $midtransService)
+    /**
+     * Create order in Komerce system (NEW METHOD)
+     */
+    public function createKomerceOrder(Request $request)
     {
-        $this->midtransService = $midtransService;
+        if (!Auth::check()) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Authentication required.'
+            ], 401);
+        }
+
+        try {
+            // Validate request
+            $validator = $this->validateOrderRequest($request);
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'VALIDATION_FAILED',
+                    'message' => 'Please check your order data',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Build order data
+            $orderData = $this->buildOrderData($request);
+
+            // Create order in Komerce
+            $result = $this->komerceOrderService->createOrder($orderData);
+
+            if (!$result['success']) {
+                return response()->json([
+                    'success' => false,
+                    'error' => $result['error'],
+                    'message' => $result['message']
+                ], 422);
+            }
+
+            // Update local order with Komerce order number
+            $order = Order::find($request->local_order_id);
+            if ($order) {
+                $order->update([
+                    'komerce_order_no' => $result['data']['order_no'],
+                    'external_order_id' => $result['data']['order_no']
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'komerce_order_no' => $result['data']['order_no'],
+                    'status' => $result['data']['status'],
+                    'message' => 'Order created in Komerce successfully'
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Komerce order creation error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'ORDER_CREATION_ERROR',
+                'message' => 'Failed to create order in Komerce'
+            ], 500);
+        }
+    }
+
+    /**
+     * Request pickup for Komerce orders (NEW METHOD)
+     */
+    public function requestKomercePickup(Request $request)
+    {
+        if (!Auth::check()) {
+            return response()->json(['success' => false, 'error' => 'Authentication required.'], 401);
+        }
+
+        try {
+            $result = $this->komerceOrderService->requestPickup(
+                $request->pickup_date,
+                $request->pickup_time,
+                $request->order_numbers,
+                $request->input('pickup_vehicle', 'Motor')
+            );
+
+            return response()->json($result);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Komerce pickup request error', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'error' => 'PICKUP_REQUEST_ERROR',
+                'message' => 'Failed to request pickup'
+            ], 500);
+        }
+    }
+
+    /**
+     * Generate Komerce shipping label (NEW METHOD)
+     */
+    public function generateKomerceLabel(Request $request)
+    {
+        if (!Auth::check()) {
+            return response()->json(['success' => false, 'error' => 'Authentication required.'], 401);
+        }
+
+        try {
+            $result = $this->komerceOrderService->printLabel(
+                $request->order_no,
+                $request->input('page_size', 'page_2')
+            );
+
+            return response()->json($result);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Komerce label generation error', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'error' => 'LABEL_GENERATION_ERROR',
+                'message' => 'Failed to generate label'
+            ], 500);
+        }
+    }
+
+    /**
+     * Track Komerce shipment (NEW METHOD)
+     */
+    public function trackKomerceShipment(Request $request)
+    {
+        try {
+            $result = $this->komerceOrderService->trackShipment(
+                $request->airway_bill,
+                $request->input('shipping', 'JNE')
+            );
+
+            return response()->json($result);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Komerce tracking error', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'error' => 'TRACKING_ERROR',
+                'message' => 'Failed to track shipment'
+            ], 500);
+        }
+    }
+
+    /**
+     * Handle Komerce webhook (NEW METHOD)
+     */
+    public function handleKomerceWebhook(Request $request)
+    {
+        try {
+            Log::info('📨 Komerce webhook received', [
+                'payload' => $request->all()
+            ]);
+
+            $orderNo = $request->order_no;
+            $status = $request->status;
+            $cnote = $request->cnote;
+
+            // Find local order by Komerce order number
+            $order = Order::where('komerce_order_no', $orderNo)
+                         ->orWhere('external_order_id', $orderNo)
+                         ->first();
+
+            if ($order) {
+                // Update tracking number if provided
+                if ($cnote) {
+                    $order->update(['tracking_number' => $cnote]);
+                }
+
+                // Update order status based on Komerce status
+                $localStatus = $this->mapKomerceStatusToLocal($status);
+                if ($localStatus) {
+                    $order->update(['status' => $localStatus]);
+                }
+
+                Log::info('✅ Order updated from Komerce webhook', [
+                    'order_id' => $order->id,
+                    'komerce_status' => $status,
+                    'local_status' => $localStatus,
+                    'tracking_number' => $cnote
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Webhook processed successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Komerce webhook error', [
+                'error' => $e->getMessage(),
+                'payload' => $request->all()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'WEBHOOK_PROCESSING_ERROR'
+            ], 500);
+        }
+    }
+
+    // Helper methods untuk Komerce integration
+    private function validateOrderRequest($request)
+    {
+        return \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'brand_name' => 'required|string|max:100',
+            'receiver_name' => 'required|string|max:100',
+            'receiver_phone' => 'required|string|max:20',
+            'receiver_destination_id' => 'required|integer',
+            'receiver_address' => 'required|string|max:255',
+            'shipping_cost' => 'required|numeric|min:0',
+            'grand_total' => 'required|numeric|min:0',
+            'order_details' => 'required|array|min:1'
+        ]);
+    }
+
+    private function buildOrderData($request)
+    {
+        $user = Auth::user();
+        
+        return [
+            'brand_name' => $request->brand_name ?? 'Sneakers Flash',
+            'shipper_name' => 'Sneakers Flash Store',
+            'shipper_phone' => '6281234567890',
+            'shipper_email' => 'sneakersflash@gmail.com',
+            'shipper_destination_id' => env('STORE_ORIGIN_DESTINATION_ID', 17485),
+            'shipper_address' => 'Duri Kepa',
+            'receiver_name' => $request->receiver_name,
+            'receiver_phone' => $request->receiver_phone,
+            'receiver_destination_id' => $request->receiver_destination_id,
+            'receiver_address' => $request->receiver_address,
+            'shipping' => 'JNE',
+            'shipping_type' => $request->shipping_type ?? 'CTC',
+            'shipping_cost' => $request->shipping_cost,
+            'grand_total' => $request->grand_total,
+            'payment_method' => $request->payment_method ?? 'BANK TRANSFER',
+            'order_details' => $request->order_details
+        ];
+    }
+
+    private function mapKomerceStatusToLocal($komerceStatus)
+    {
+        $statusMap = [
+            'pending' => 'pending',
+            'processed' => 'processing',
+            'shipped' => 'shipped',
+            'delivered' => 'delivered',
+            'cancelled' => 'cancelled'
+        ];
+
+        return $statusMap[strtolower($komerceStatus)] ?? null;
     }
 
     /**
@@ -631,4 +884,262 @@ return response()->json([
 ], 500);
 }
 }
+
+/**
+     * Create order in Komerce system (NEW METHOD)
+     */
+    public function createKomerceOrder(Request $request)
+    {
+        if (!Auth::check()) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Authentication required.'
+            ], 401);
+        }
+
+        try {
+            // Validate request
+            $validator = $this->validateOrderRequest($request);
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'VALIDATION_FAILED',
+                    'message' => 'Please check your order data',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Build order data
+            $orderData = $this->buildOrderData($request);
+
+            // Create order in Komerce
+            $result = $this->komerceOrderService->createOrder($orderData);
+
+            if (!$result['success']) {
+                return response()->json([
+                    'success' => false,
+                    'error' => $result['error'],
+                    'message' => $result['message']
+                ], 422);
+            }
+
+            // Update local order with Komerce order number
+            $order = Order::find($request->local_order_id);
+            if ($order) {
+                $order->update([
+                    'komerce_order_no' => $result['data']['order_no'],
+                    'external_order_id' => $result['data']['order_no']
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'komerce_order_no' => $result['data']['order_no'],
+                    'status' => $result['data']['status'],
+                    'message' => 'Order created in Komerce successfully'
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Komerce order creation error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'ORDER_CREATION_ERROR',
+                'message' => 'Failed to create order in Komerce'
+            ], 500);
+        }
+    }
+
+    /**
+     * Request pickup for Komerce orders (NEW METHOD)
+     */
+    public function requestKomercePickup(Request $request)
+    {
+        if (!Auth::check()) {
+            return response()->json(['success' => false, 'error' => 'Authentication required.'], 401);
+        }
+
+        try {
+            $result = $this->komerceOrderService->requestPickup(
+                $request->pickup_date,
+                $request->pickup_time,
+                $request->order_numbers,
+                $request->input('pickup_vehicle', 'Motor')
+            );
+
+            return response()->json($result);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Komerce pickup request error', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'error' => 'PICKUP_REQUEST_ERROR',
+                'message' => 'Failed to request pickup'
+            ], 500);
+        }
+    }
+
+    /**
+     * Generate Komerce shipping label (NEW METHOD)
+     */
+    public function generateKomerceLabel(Request $request)
+    {
+        if (!Auth::check()) {
+            return response()->json(['success' => false, 'error' => 'Authentication required.'], 401);
+        }
+
+        try {
+            $result = $this->komerceOrderService->printLabel(
+                $request->order_no,
+                $request->input('page_size', 'page_2')
+            );
+
+            return response()->json($result);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Komerce label generation error', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'error' => 'LABEL_GENERATION_ERROR',
+                'message' => 'Failed to generate label'
+            ], 500);
+        }
+    }
+
+    /**
+     * Track Komerce shipment (NEW METHOD)
+     */
+    public function trackKomerceShipment(Request $request)
+    {
+        try {
+            $result = $this->komerceOrderService->trackShipment(
+                $request->airway_bill,
+                $request->input('shipping', 'JNE')
+            );
+
+            return response()->json($result);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Komerce tracking error', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'error' => 'TRACKING_ERROR',
+                'message' => 'Failed to track shipment'
+            ], 500);
+        }
+    }
+
+    /**
+     * Handle Komerce webhook (NEW METHOD)
+     */
+    public function handleKomerceWebhook(Request $request)
+    {
+        try {
+            Log::info('📨 Komerce webhook received', [
+                'payload' => $request->all()
+            ]);
+
+            $orderNo = $request->order_no;
+            $status = $request->status;
+            $cnote = $request->cnote;
+
+            // Find local order by Komerce order number
+            $order = Order::where('komerce_order_no', $orderNo)
+                         ->orWhere('external_order_id', $orderNo)
+                         ->first();
+
+            if ($order) {
+                // Update tracking number if provided
+                if ($cnote) {
+                    $order->update(['tracking_number' => $cnote]);
+                }
+
+                // Update order status based on Komerce status
+                $localStatus = $this->mapKomerceStatusToLocal($status);
+                if ($localStatus) {
+                    $order->update(['status' => $localStatus]);
+                }
+
+                Log::info('✅ Order updated from Komerce webhook', [
+                    'order_id' => $order->id,
+                    'komerce_status' => $status,
+                    'local_status' => $localStatus,
+                    'tracking_number' => $cnote
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Webhook processed successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Komerce webhook error', [
+                'error' => $e->getMessage(),
+                'payload' => $request->all()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'WEBHOOK_PROCESSING_ERROR'
+            ], 500);
+        }
+    }
+
+    // Helper methods untuk Komerce integration
+    private function validateOrderRequest($request)
+    {
+        return \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'brand_name' => 'required|string|max:100',
+            'receiver_name' => 'required|string|max:100',
+            'receiver_phone' => 'required|string|max:20',
+            'receiver_destination_id' => 'required|integer',
+            'receiver_address' => 'required|string|max:255',
+            'shipping_cost' => 'required|numeric|min:0',
+            'grand_total' => 'required|numeric|min:0',
+            'order_details' => 'required|array|min:1'
+        ]);
+    }
+
+    private function buildOrderData($request)
+    {
+        $user = Auth::user();
+        
+        return [
+            'brand_name' => $request->brand_name ?? 'Sneakers Flash',
+            'shipper_name' => 'Sneakers Flash Store',
+            'shipper_phone' => '6281234567890',
+            'shipper_email' => 'sneakersflash@gmail.com',
+            'shipper_destination_id' => env('STORE_ORIGIN_DESTINATION_ID', 17485),
+            'shipper_address' => 'Duri Kepa',
+            'receiver_name' => $request->receiver_name,
+            'receiver_phone' => $request->receiver_phone,
+            'receiver_destination_id' => $request->receiver_destination_id,
+            'receiver_address' => $request->receiver_address,
+            'shipping' => 'JNE',
+            'shipping_type' => $request->shipping_type ?? 'CTC',
+            'shipping_cost' => $request->shipping_cost,
+            'grand_total' => $request->grand_total,
+            'payment_method' => $request->payment_method ?? 'BANK TRANSFER',
+            'order_details' => $request->order_details
+        ];
+    }
+
+    private function mapKomerceStatusToLocal($komerceStatus)
+    {
+        $statusMap = [
+            'pending' => 'pending',
+            'processed' => 'processing',
+            'shipped' => 'shipped',
+            'delivered' => 'delivered',
+            'cancelled' => 'cancelled'
+        ];
+
+        return $statusMap[strtolower($komerceStatus)] ?? null;
+    }
 }

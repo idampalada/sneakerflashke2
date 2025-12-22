@@ -768,7 +768,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <!-- Kolom 3 -->
         <div class="brand-column">
             <a href="/products?brands[]=Air+Jordan" class="dropdown-item">
-                <i class="fas fa-nike mr-2"></i>Air JORDAN
+                <i class="fas fa-nike mr-2"></i>AIR JORDAN
             </a>
             <a href="/products?brands[]=Reebok" class="dropdown-item">
                 <i class="fas fa-nike mr-2"></i>REEBOK
@@ -787,7 +787,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 <i class="fas fa-nike mr-2"></i>ON
             </a>
             <a href="/products?brands[]=Other" class="dropdown-item">
-                <i class="fas fa-nike mr-2"></i>Other
+                <i class="fas fa-nike mr-2"></i>OTHER
             </a>
         </div>
     </div>

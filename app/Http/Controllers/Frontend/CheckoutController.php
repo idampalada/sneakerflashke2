@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\UserAddress;
 use App\Services\MidtransService;
 use App\Services\RajaOngkirService;
+use App\Services\KomerceShippingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -25,24 +26,30 @@ class CheckoutController extends Controller
     private $rajaOngkirApiKey;
     private $rajaOngkirBaseUrl;
     private $midtransService;
+    private $komerceShippingService; // ✅ TAMBAH INI
 
-    public function __construct(MidtransService $midtransService)
-    {
+    public function __construct(
+        MidtransService $midtransService,
+        KomerceShippingService $komerceShippingService // ✅ TAMBAH INI
+    ) {
         $this->midtransService = $midtransService;
+        $this->komerceShippingService = $komerceShippingService; // ✅ TAMBAH INI
         
-        // RajaOngkir API V2 via Komerce
+        // RajaOngkir API V2 via Komerce (keep for backward compatibility)
         $this->rajaOngkirApiKey = config('services.rajaongkir.api_key') ?: env('RAJAONGKIR_API_KEY');
         $this->rajaOngkirBaseUrl = 'https://rajaongkir.komerce.id/api/v1';
         
-        Log::info('RajaOngkir V2 Controller initialized with Address Integration + Voucher System', [
-            'base_url' => $this->rajaOngkirBaseUrl,
-            'api_key_set' => !empty($this->rajaOngkirApiKey),
+        Log::info('Checkout Controller initialized with Komerce + RajaOngkir', [
+            'rajaongkir_base_url' => $this->rajaOngkirBaseUrl,
+            'rajaongkir_api_key_set' => !empty($this->rajaOngkirApiKey),
+            'komerce_api_configured' => !empty(env('KOMERCE_API_KEY')), // ✅ TAMBAH INI
+            'komerce_base_url' => env('KOMERCE_BASE_URL'), // ✅ TAMBAH INI
+            'store_origin_id' => env('STORE_ORIGIN_DESTINATION_ID'), // ✅ TAMBAH INI
             'origin_city' => env('STORE_ORIGIN_CITY_NAME', 'Not configured'),
             'origin_city_id' => env('STORE_ORIGIN_CITY_ID', 'Not configured'),
             'midtrans_configured' => !empty(config('services.midtrans.server_key'))
         ]);
     }
-
     /**
      * Index method with proper cart item handling and voucher info
      */
@@ -603,48 +610,64 @@ private function filterAndSortResultsWithValidation($results, $originalSearch)
 public function calculateShipping(Request $request)
 {
     try {
+        // Get REAL customer destination from form input
         $destinationId = $request->input('destination_id');
         $destinationLabel = $request->input('destination_label', '');
         $weight = $request->input('weight', 1000);
+        
+        // Get customer shipping address data
+        $customerCity = $request->input('city_name', '');
+        $customerSubdistrict = $request->input('subdistrict_name', '');
+        $customerProvince = $request->input('province_name', '');
+        $customerPostalCode = $request->input('postal_code', '');
+        $customerStreetAddress = $request->input('street_address', '');
 
-        Log::info('🚢 Web Shipping calculation request', [
+        Log::info('🚢 Komerce Shipping calculation with customer data', [
             'destination_id' => $destinationId,
             'destination_label' => $destinationLabel,
+            'customer_address' => [
+                'city' => $customerCity,
+                'subdistrict' => $customerSubdistrict,
+                'province' => $customerProvince,
+                'postal_code' => $customerPostalCode,
+                'street' => substr($customerStreetAddress, 0, 50)
+            ],
             'weight' => $weight,
             'request_method' => $request->method(),
             'request_url' => $request->fullUrl(),
-            'user_agent' => $request->userAgent(),
             'all_input' => $request->all()
         ]);
 
-        // CRITICAL: Strict validation for web requests
+        // CRITICAL: Strict validation for customer destination
         if (!$destinationId || empty(trim($destinationId)) || !is_numeric($destinationId)) {
-            Log::error('❌ Web: Invalid destination_id', [
+            Log::error('❌ Komerce: Invalid destination_id from customer input', [
                 'provided_destination_id' => $destinationId,
                 'is_numeric' => is_numeric($destinationId),
                 'is_empty' => empty(trim($destinationId)),
-                'type' => gettype($destinationId)
+                'type' => gettype($destinationId),
+                'customer_location' => $customerCity . ', ' . $customerSubdistrict
             ]);
             
             return response()->json([
                 'success' => false,
                 'error' => 'INVALID_DESTINATION',
-                'message' => 'Please select a valid delivery location',
+                'message' => 'Please complete your delivery address selection',
                 'debug' => [
                     'destination_id' => $destinationId,
                     'destination_label' => $destinationLabel,
+                    'customer_location' => $customerCity . ', ' . $customerSubdistrict,
                     'validation_failed' => 'destination_id must be numeric and not empty'
                 ]
             ], 422);
         }
 
-        // Get origin with validation
-        $originId = env('STORE_ORIGIN_CITY_ID', 17549);
+        // Get store origin from Komerce environment
+        $storeOriginId = env('STORE_ORIGIN_DESTINATION_ID', 17485);
         
-        if (!$originId || !is_numeric($originId)) {
-            Log::error('❌ Web: Invalid origin configuration', [
-                'origin_id' => $originId,
-                'env_value' => env('STORE_ORIGIN_CITY_ID')
+        if (!$storeOriginId || !is_numeric($storeOriginId)) {
+            Log::error('❌ Komerce: Invalid store origin configuration', [
+                'origin_id' => $storeOriginId,
+                'env_value' => env('STORE_ORIGIN_DESTINATION_ID')
             ]);
             
             return response()->json([
@@ -654,37 +677,50 @@ public function calculateShipping(Request $request)
             ], 500);
         }
 
-        // Ensure minimum weight
-        $weight = max(1000, (int) $weight);
+        // Calculate cart value and weight from session
+        $cart = session()->get('cart', []);
+        $itemValue = 0;
+        $totalWeight = 0;
         
-        Log::info('🎯 Web: Starting shipping calculation', [
-            'origin_id' => $originId,
-            'destination_id' => $destinationId,
-            'weight' => $weight,
-            'api_url' => $this->rajaOngkirBaseUrl . '/calculate/domestic-cost'
+        foreach ($cart as $item) {
+            $itemValue += ($item['price'] * $item['quantity']);
+            $totalWeight += (($item['weight'] ?? 1000) * $item['quantity']); // fallback 1kg per item
+        }
+        
+        // Use calculated total weight if available, fallback to request weight
+        $finalWeight = $totalWeight > 0 ? $totalWeight : max(1000, (int) $weight);
+        
+        Log::info('🎯 Komerce: Starting shipping calculation', [
+            'store_origin_id' => $storeOriginId,
+            'customer_destination_id' => $destinationId,
+            'final_weight' => $finalWeight,
+            'item_value' => $itemValue,
+            'cart_items_count' => count($cart),
+            'customer_full_address' => $customerStreetAddress . ', ' . $customerSubdistrict . ', ' . $customerCity,
+            'api_url' => env('KOMERCE_BASE_URL') . '/tariff/api/v1/calculate'
         ]);
 
-        // Make API request using EXACT same format as successful command
+        // Call Komerce API with customer data
         $startTime = microtime(true);
         
-        $response = Http::asForm()
-            ->withHeaders([
-                'accept' => 'application/json',
-                'key' => $this->rajaOngkirApiKey,
-                'user-agent' => 'Laravel-Web-Request'
-            ])
-            ->timeout(30)
-            ->retry(2, 1000)
-            ->post($this->rajaOngkirBaseUrl . '/calculate/domestic-cost', [
-                'origin' => $originId,
-                'destination' => $destinationId,
-                'weight' => $weight,
-                'courier' => 'jne'
-            ]);
+        $response = Http::withHeaders([
+            'x-api-key' => env('KOMERCE_API_KEY'),
+            'accept' => 'application/json',
+            'user-agent' => 'Laravel-Komerce-Integration'
+        ])
+        ->timeout(env('KOMERCE_TIMEOUT', 30))
+        ->retry(2, 1000)
+->get('https://api-sandbox.collaborator.komerce.id/tariff/api/v1/calculate', [
+            'shipper_destination_id' => $storeOriginId,      // Store location: 17485
+            'receiver_destination_id' => $destinationId,     // Customer location: from form
+            'weight' => number_format($finalWeight / 1000, 3, '.', ''), // Convert to kg
+            'item_value' => $itemValue,                      // Cart total value
+            'cod' => 'no'                                    // Can be dynamic later
+        ]);
 
         $executionTime = round((microtime(true) - $startTime) * 1000, 2);
 
-        Log::info("📡 Web: RajaOngkir API Response", [
+        Log::info("📡 Komerce API Response", [
             'status_code' => $response->status(),
             'successful' => $response->successful(),
             'execution_time_ms' => $executionTime,
@@ -697,161 +733,325 @@ public function calculateShipping(Request $request)
             $errorBody = $response->body();
             $statusCode = $response->status();
             
-            Log::error("❌ Web: RajaOngkir API Error", [
+            Log::error("❌ Komerce API Error", [
                 'status_code' => $statusCode,
                 'error_response' => $errorBody,
                 'request_data' => [
-                    'origin' => $originId,
-                    'destination' => $destinationId,
-                    'weight' => $weight,
-                    'courier' => 'jne'
+                    'shipper_destination_id' => $storeOriginId,
+                    'receiver_destination_id' => $destinationId,
+                    'weight' => number_format($finalWeight / 1000, 3, '.', ''),
+                    'item_value' => $itemValue,
+                    'customer_address' => $customerCity . ', ' . $customerSubdistrict
                 ]
             ]);
 
             return response()->json([
                 'success' => false,
                 'error' => 'API_REQUEST_FAILED',
-                'message' => $this->getWebErrorMessage($statusCode),
+                'message' => $this->getKomerceErrorMessage($statusCode),
                 'debug' => [
                     'api_status' => $statusCode,
-                    'execution_time_ms' => $executionTime
+                    'execution_time_ms' => $executionTime,
+                    'customer_destination' => $customerSubdistrict . ', ' . $customerCity
                 ]
             ], 422);
         }
 
         // Parse successful response
         $data = $response->json();
+
+        // SEBELUM transform, tambah ini:
+Log::info('🔍 Raw Komerce response BEFORE transform:', [
+    'status' => $data['status'] ?? 'unknown',
+    'data_structure' => array_keys($data),
+    'first_data_item' => isset($data['data'][0]) ? array_keys($data['data'][0]) : null,
+    'raw_data_sample' => json_encode(array_slice($data['data'] ?? [], 0, 1))
+]);
         
-        Log::info("✅ Web: API Success Response", [
+        // ✅ TRANSFORM: Extract original_data to expected parsing format
+if (isset($data['data']) && is_array($data['data'])) {
+    $transformedData = [];
+    
+    // PERBAIKAN: Data ada di calculate_reguler, bukan langsung di data
+    $shippingOptions = $data['data']['calculate_reguler'] ?? [];
+    
+    if (is_array($shippingOptions)) {
+        foreach ($shippingOptions as $shipping) {
+            // Only process JNE for your system
+            $shippingName = strtoupper($shipping['shipping_name'] ?? '');
+            if ($shippingName !== 'JNE') {
+                continue;
+            }
+            
+            // Transform to format expected by natural parsing
+            $transformedItem = [
+                'courier_code' => $shippingName,
+                'courier_name' => 'Jalur Nugraha Ekakurir (JNE)',
+                'service_code' => $shipping['service_name'] ?? 'REG',
+                'service_name' => $shipping['service_name'] ?? 'REG',
+                'cost' => (int) ($shipping['shipping_cost_net'] ?? $shipping['shipping_cost'] ?? 0),
+                'etd' => $shipping['etd'] ?? 'N/A',
+                'weight' => $shipping['weight'] ?? 0,
+                'shipping_cost_gross' => $shipping['shipping_cost'] ?? 0,
+                'shipping_cost_net' => $shipping['shipping_cost_net'] ?? 0,
+                'shipping_cashback' => $shipping['shipping_cashback'] ?? 0,
+                'original_komerce_data' => $shipping
+            ];
+            
+            $transformedData[] = $transformedItem;
+        }
+    }
+    
+    // Replace data dengan format yang sudah di-transform  
+    $data['data'] = $transformedData;
+}
+        
+        Log::info("✅ Komerce API Success Response", [
             'has_data' => isset($data['data']),
             'data_count' => isset($data['data']) ? count($data['data']) : 0,
+            'jne_options_found' => isset($data['data']) ? count($data['data']) : 0,
             'execution_time_ms' => $executionTime,
-            'meta_message' => $data['meta']['message'] ?? 'No meta message'
+            'status' => $data['status'] ?? 'unknown'
         ]);
 
         // Validate response structure
         if (!isset($data['data']) || !is_array($data['data']) || empty($data['data'])) {
-            Log::error("❌ Web: Invalid or empty response", [
+            Log::error("❌ Komerce: No JNE options found", [
                 'has_data_key' => isset($data['data']),
                 'is_array' => isset($data['data']) ? is_array($data['data']) : false,
                 'data_count' => isset($data['data']) ? count($data['data']) : 0,
-                'response_structure' => array_keys($data ?? [])
+                'customer_destination' => $customerSubdistrict . ', ' . $customerCity
             ]);
             
             return response()->json([
                 'success' => false,
-                'error' => 'NO_SHIPPING_OPTIONS',
-                'message' => 'No shipping services available for this destination',
+                'error' => 'NO_JNE_OPTIONS',
+                'message' => 'No JNE shipping services available for this destination',
                 'debug' => [
-                    'api_response_meta' => $data['meta'] ?? null,
-                    'execution_time_ms' => $executionTime
+                    'execution_time_ms' => $executionTime,
+                    'customer_location' => $customerSubdistrict . ', ' . $customerCity
                 ]
             ], 422);
         }
 
-        // Parse shipping options with enhanced validation
+        // Parse JNE shipping options with natural parsing
         $shippingOptions = [];
         
         foreach ($data['data'] as $index => $option) {
             if (!is_array($option)) {
-                Log::warning("Web: Skipping invalid option at index {$index}", [
-                    'option_type' => gettype($option)
-                ]);
                 continue;
             }
             
             $cost = (int) ($option['cost'] ?? 0);
-            $service = trim($option['service'] ?? '');
+            $serviceCode = trim($option['service_code'] ?? '');
+            $serviceName = $option['service_name'] ?? $serviceCode;
+            $courierCode = strtoupper($option['courier_code'] ?? 'JNE');
+            $courierName = $option['courier_name'] ?? 'Jalur Nugraha Ekakurir (JNE)';
             
-            if ($cost <= 0 || empty($service)) {
-                Log::warning("Web: Skipping invalid option", [
-                    'index' => $index,
-                    'cost' => $cost,
-                    'service' => $service
-                ]);
+            if ($cost <= 0 || empty($serviceCode)) {
                 continue;
             }
             
             $shippingOptions[] = [
-                'courier' => strtoupper($option['code'] ?? 'JNE'),
-                'courier_name' => $option['name'] ?? 'Jalur Nugraha Ekakurir (JNE)',
-                'service' => $service,
-                'description' => $option['description'] ?? $service,
+                'courier' => $courierCode,
+                'courier_name' => $courierName,
+                'service' => $serviceCode,
+                'service_name' => $serviceName,
+                'description' => $serviceName,
                 'cost' => $cost,
                 'formatted_cost' => 'Rp ' . number_format($cost, 0, ',', '.'),
                 'etd' => $option['etd'] ?? 'N/A',
-                'formatted_etd' => $option['etd'] ?? 'N/A',
-                'recommended' => $index === 0, // First option is recommended
-                'type' => 'real_api'
+                'formatted_etd' => $this->formatKomerceETD($option['etd'] ?? 'N/A'),
+                'recommended' => ($index === 0), // First JNE option as recommended
+                'type' => 'komerce_api',
+                'customer_location' => $customerSubdistrict . ', ' . $customerCity,
+                'shipping_details' => [
+                    'weight' => $option['weight'] ?? 0,
+                    'cost_gross' => $option['shipping_cost_gross'] ?? 0,
+                    'cost_net' => $option['shipping_cost_net'] ?? 0,
+                    'cashback' => $option['shipping_cashback'] ?? 0
+                ]
             ];
         }
 
-        // ⭐ FILTER: Hapus layanan JNE yang tidak diinginkan
+        // Apply filtering for unwanted JNE services
         $shippingOptions = $this->filterCheckoutJNEServices($shippingOptions);
 
         if (empty($shippingOptions)) {
-            Log::error("❌ Web: No valid shipping options after parsing and filtering", [
-                'raw_options_count' => count($data['data']),
-                'sample_raw_option' => $data['data'][0] ?? null
+            Log::error("❌ Komerce: No valid JNE options after filtering", [
+                'raw_jne_count' => count($data['data']),
+                'customer_destination' => $customerSubdistrict . ', ' . $customerCity
             ]);
             
             return response()->json([
                 'success' => false,
-                'error' => 'NO_SHIPPING_OPTIONS_AFTER_FILTERING',
-                'message' => 'No shipping services available for this destination after filtering',
+                'error' => 'NO_JNE_OPTIONS_AFTER_FILTERING',
+                'message' => 'No JNE services available after filtering',
                 'debug' => [
-                    'raw_options_count' => count($data['data'])
+                    'raw_jne_count' => count($data['data']),
+                    'customer_location' => $customerSubdistrict . ', ' . $customerCity
                 ]
             ], 422);
         }
 
-        Log::info("🎯 Web: Shipping calculation successful", [
-            'options_count' => count($shippingOptions),
-            'sample_options' => array_map(function($opt) {
+        Log::info("🎯 Komerce: JNE shipping calculation successful", [
+            'jne_options_count' => count($shippingOptions),
+            'jne_options' => array_map(function($opt) {
                 return $opt['service'] . ' - Rp ' . number_format($opt['cost']);
-            }, array_slice($shippingOptions, 0, 3)),
-            'execution_time_ms' => $executionTime
+            }, $shippingOptions),
+            'execution_time_ms' => $executionTime,
+            'customer_destination' => $customerSubdistrict . ', ' . $customerCity,
+            'store_to_customer' => "Store Origin: {$storeOriginId} → Customer: {$destinationId}"
         ]);
 
         return response()->json([
             'success' => true,
             'options' => $shippingOptions,
-            'message' => 'Shipping options calculated successfully',
+            'message' => 'JNE shipping options calculated successfully',
             'meta' => [
                 'options_count' => count($shippingOptions),
                 'execution_time_ms' => $executionTime,
-                'destination_label' => $destinationLabel
+                'destination_label' => $destinationLabel,
+                'customer_location' => $customerSubdistrict . ', ' . $customerCity,
+                'api_provider' => 'Komerce',
+                'store_origin_id' => $storeOriginId,
+                'customer_destination_id' => $destinationId,
+                'weight_kg' => number_format($finalWeight / 1000, 3),
+                'item_value' => $itemValue,
+                'shipping_provider' => 'JNE Only'
             ]
         ]);
         
     } catch (\Illuminate\Http\Client\ConnectionException $e) {
-        Log::error('❌ Web: Connection timeout', [
+        Log::error('❌ Komerce: Connection timeout', [
             'error' => $e->getMessage(),
-            'destination_id' => $destinationId ?? 'unknown'
+            'destination_id' => $destinationId ?? 'unknown',
+            'customer_location' => ($customerCity ?? '') . ', ' . ($customerSubdistrict ?? '')
         ]);
         
         return response()->json([
             'success' => false,
             'error' => 'CONNECTION_TIMEOUT',
-            'message' => 'Connection to shipping service timed out. Please try again.'
+            'message' => 'Connection to Komerce shipping service timed out. Please try again.'
         ], 408);
         
     } catch (\Exception $e) {
-        Log::error('❌ Web: Unexpected error', [
+        Log::error('❌ Komerce: Unexpected error', [
             'error' => $e->getMessage(),
             'file' => $e->getFile(),
             'line' => $e->getLine(),
-            'destination_id' => $destinationId ?? 'unknown'
+            'destination_id' => $destinationId ?? 'unknown',
+            'customer_location' => ($customerCity ?? '') . ', ' . ($customerSubdistrict ?? '')
         ]);
         
         return response()->json([
             'success' => false,
             'error' => 'UNEXPECTED_ERROR',
-            'message' => 'An unexpected error occurred. Please try again.'
+            'message' => 'An unexpected error occurred while calculating shipping. Please try again.'
         ], 500);
     }
 }
 
+/**
+ * Get Komerce-specific error message
+ */
+private function getKomerceErrorMessage($statusCode)
+{
+    switch ($statusCode) {
+        case 400:
+            return 'Invalid shipping parameters. Please check your delivery address.';
+        case 401:
+            return 'Shipping service authentication failed. Please contact support.';
+        case 422:
+            return 'Invalid destination or shipping parameters.';
+        case 429:
+            return 'Too many requests. Please wait a moment and try again.';
+        case 500:
+            return 'Komerce shipping service is temporarily unavailable. Please try again in a few minutes.';
+        case 502:
+        case 503:
+        case 504:
+            return 'Komerce shipping service is temporarily down. Please try again later.';
+        default:
+            return "Komerce shipping service error (HTTP {$statusCode}). Please try again.";
+    }
+}
+
+/**
+ * Format Komerce ETD for display
+ */
+private function formatKomerceETD($etd)
+{
+    if (empty($etd) || $etd === 'N/A') {
+        return 'N/A';
+    }
+    
+    // If already contains 'day' or 'hari', return as is
+    if (stripos($etd, 'day') !== false || stripos($etd, 'hari') !== false) {
+        return $etd;
+    }
+    
+    // Add 'day' suffix for consistency
+    return $etd . ' day';
+}
+
+/**
+ * Get shipping configuration
+ */
+public function getShippingConfig()
+{
+    return response()->json([
+        'api_provider' => 'Komerce',
+        'store_origin_id' => env('STORE_ORIGIN_DESTINATION_ID', 17485),
+        'store_location' => env('STORE_LOCATION_NAME', 'Duri Kepa, Jakarta Barat'),
+        'api_configured' => !empty(env('KOMERCE_API_KEY')),
+        'base_url' => env('KOMERCE_BASE_URL'),
+        'timeout' => env('KOMERCE_TIMEOUT', 25),
+        'environment' => env('APP_ENV'),
+        'version' => '2.0-komerce-customer-integration'
+    ]);
+}
+
+/**
+ * Test Komerce API connection
+ */
+public function testKomerceAPI(Request $request)
+{
+    try {
+        Log::info('🧪 Testing Komerce API connection');
+        
+        $storeOriginId = env('STORE_ORIGIN_DESTINATION_ID', 17485);
+        $testDestinationId = $request->input('destination_id', 17551);
+        $testWeight = $request->input('weight', 2500);
+        $testValue = $request->input('item_value', 70000);
+        
+        $result = $this->komerceShippingService->calculateShipping(
+            $storeOriginId,
+            $testDestinationId,
+            $testWeight,
+            $testValue,
+            false
+        );
+        
+        return response()->json([
+            'test_successful' => $result['success'] ?? false,
+            'api_response' => $result,
+            'environment_config' => [
+                'komerce_api_key_set' => !empty(env('KOMERCE_API_KEY')),
+                'komerce_base_url' => env('KOMERCE_BASE_URL'),
+                'store_origin_id' => $storeOriginId
+            ],
+            'timestamp' => now()
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'test_successful' => false,
+            'error' => $e->getMessage(),
+            'timestamp' => now()
+        ], 500);
+    }
+}
 
 private function generateSmartSearchVariations($search)
 {

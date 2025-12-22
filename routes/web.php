@@ -36,9 +36,46 @@ Route::get('/', [HomeController::class, 'index'])->name('home');
 // WEBHOOK ROUTES - TANPA CSRF PROTECTION
 // =====================================
 Route::withoutMiddleware(['web'])->group(function () {
+
+        Route::prefix('debug/komerce')->name('debug.komerce.')->group(function() {
+        Route::post('/shipping-test', function(Request $request) {
+            try {
+                $service = new \App\Services\KomerceShippingService();
+                
+                $originId = $request->input('origin_id', 17485);
+                $destinationId = $request->input('destination_id', 17551);
+                $weight = $request->input('weight', 2500);
+                $itemValue = $request->input('item_value', 70000);
+                $cod = $request->boolean('cod', false);
+                
+                $result = $service->calculateShipping($originId, $destinationId, $weight, $itemValue, $cod);
+                
+                return response()->json([
+                    'test_type' => 'komerce_shipping_calculation',
+                    'success' => $result['success'] ?? false,
+                    'data' => $result['data'] ?? null,
+                    'execution_time_ms' => $result['execution_time_ms'] ?? 0,
+                    'request_params' => compact('originId', 'destinationId', 'weight', 'itemValue', 'cod'),
+                    'timestamp' => now()
+                ]);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'test_type' => 'komerce_shipping_calculation',
+                    'success' => false,
+                    'error' => $e->getMessage(),
+                    'timestamp' => now()
+                ], 500);
+            }
+        })->name('shipping.test');
+    });
+
     // PRIMARY WEBHOOK - Use this URL in Midtrans Dashboard
     Route::post('/checkout/payment-notification', [CheckoutController::class, 'paymentNotification'])
           ->name('checkout.payment-notification');
+
+
+              Route::post('/webhook/komerce/order-status', [OrderController::class, 'handleKomerceWebhook'])
+        ->name('webhook.komerce.order');
 
     // ALTERNATIVE WEBHOOK ENDPOINTS
     Route::post('/checkout/payment/notification', [CheckoutController::class, 'paymentNotification'])
@@ -193,8 +230,10 @@ Route::prefix('checkout')->name('checkout.')->group(function () {
     
     // RajaOngkir integration
     Route::get('/search-destinations', [CheckoutController::class, 'searchDestinations'])->name('search-destinations');
-    Route::post('/calculate-shipping', [CheckoutController::class, 'calculateShipping'])->name('calculate-shipping');
-    
+    //Route::post('/calculate-shipping', [CheckoutController::class, 'calculateShipping'])->name('calculate-shipping');
+        Route::post('/calculate-shipping-komerce', [CheckoutController::class, 'calculateShipping'])
+        ->name('calculate-shipping-komerce');
+
     // Payment flow - ALL PAYMENT METHODS
     Route::get('/payment/{orderNumber}', [CheckoutController::class, 'payment'])->name('payment');
     Route::get('/success/{orderNumber}', [CheckoutController::class, 'success'])->name('success');
@@ -283,6 +322,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/ginee-stock', [GineeSyncController::class, 'getGineeStock'])->name('ginee.stock');
         Route::get('/test-endpoints', [GineeSyncController::class, 'testEndpoints'])->name('test.endpoints');
     });
+
+        Route::prefix('orders/komerce')->name('orders.komerce.')->group(function () {
+        // Create order in Komerce system
+        Route::post('/create', [OrderController::class, 'createKomerceOrder'])
+            ->name('create');
+        
+        // Request pickup for orders
+        Route::post('/request-pickup', [OrderController::class, 'requestKomercePickup'])
+            ->name('pickup');
+        
+        // Generate shipping label
+        Route::post('/generate-label', [OrderController::class, 'generateKomerceLabel'])
+            ->name('label');
+        
+        // Track shipment
+        Route::get('/track-shipment', [OrderController::class, 'trackKomerceShipment'])
+            ->name('track');
+    });
+
 });
 
 
@@ -303,19 +361,36 @@ Route::prefix('api')->name('api.')->group(function() {
     Route::get('/checkout/search-destinations', [CheckoutController::class, 'searchDestinations'])->name('checkout.search-destinations');
     Route::post('/checkout/shipping', [CheckoutController::class, 'calculateShipping'])->name('checkout.shipping');
     
+    // Address hierarchical routes
     Route::prefix('addresses')->name('addresses.hierarchical.')->group(function() {
-    Route::get('/provinces', [AddressController::class, 'getProvinces'])->name('provinces');
-    Route::get('/cities/{provinceId}', [AddressController::class, 'getCitiesByProvince'])->name('cities');
-    Route::get('/districts/{cityId}', [AddressController::class, 'getDistrictsByCity'])->name('districts');
-    Route::get('/sub-districts/{districtId}', [AddressController::class, 'getSubDistrictsByDistrict'])->name('sub-districts');
-    Route::get('/test-endpoints', [AddressController::class, 'testEndpoints'])->name('test-endpoints');
-});
+        Route::get('/provinces', [AddressController::class, 'getProvinces'])->name('provinces');
+        Route::get('/cities/{provinceId}', [AddressController::class, 'getCitiesByProvince'])->name('cities');
+        Route::get('/districts/{cityId}', [AddressController::class, 'getDistrictsByCity'])->name('districts');
+        Route::get('/sub-districts/{districtId}', [AddressController::class, 'getSubDistrictsByDistrict'])->name('sub-districts');
+        Route::get('/test-endpoints', [AddressController::class, 'testEndpoints'])->name('test-endpoints');
+    });
+    
+    // ✅ KOMERCE API ROUTES (PERBAIKAN)
+    Route::prefix('komerce')->name('komerce.')->group(function() {
+        // Public Komerce shipping API
+        Route::prefix('shipping')->name('shipping.')->group(function() {
+            Route::post('/calculate', [CheckoutController::class, 'calculateShipping'])->name('calculate');
+            Route::get('/test', [CheckoutController::class, 'testKomerceAPI'])->name('test');
+            Route::get('/config', [CheckoutController::class, 'getShippingConfig'])->name('config');
+        });
+        
+        // Authenticated Komerce order API
+        Route::middleware('auth')->prefix('orders')->name('orders.')->group(function() {
+            Route::post('/create', [OrderController::class, 'createKomerceOrder'])->name('create');
+            Route::post('/request-pickup', [OrderController::class, 'requestKomercePickup'])->name('pickup');
+            Route::post('/generate-label', [OrderController::class, 'generateKomerceLabel'])->name('label');
+            Route::get('/track-shipment', [OrderController::class, 'trackKomerceShipment'])->name('track');
+        });
+    });
+    
     // Payment status
     Route::get('/payment/status/{orderNumber}', [CheckoutController::class, 'getPaymentStatus'])->name('payment.status');
     Route::get('/payment/check/{orderNumber}', [CheckoutController::class, 'checkPaymentStatus'])->name('payment.check');
-    
-    // ❌ REMOVED: Route::post('/payment/retry/{orderNumber}', [OrderController::class, 'retryPayment'])->name('payment.retry');
-    // ✅ MOVED TO: /checkout/retry-payment/{orderNumber} above
     
     // Authenticated API routes
     Route::middleware('auth')->group(function() {
@@ -365,130 +440,6 @@ Route::get('/size-guide', function() { return view('frontend.pages.size-guide');
 Route::get('/terms', function() { return view('frontend.pages.terms'); })->name('terms');
 Route::get('/privacy', function() { return view('frontend.pages.privacy'); })->name('privacy');
 
-// =====================================
-// DEBUG ROUTES (Only in local/staging)
-// =====================================
-if (app()->environment(['local', 'staging'])) {
-    Route::prefix('debug')->group(function() {
-        // Cart debug
-        Route::get('/cart', function() {
-            $cart = Session::get('cart', []);
-            $cartItems = collect();
-            
-            foreach ($cart as $cartKey => $details) {
-                $productId = $details['product_id'] ?? null;
-                $product = null;
-                
-                if ($productId) {
-                    $product = \App\Models\Product::find($productId);
-                }
-                
-                $cartItems->push([
-                    'cart_key' => $cartKey,
-                    'raw_data' => $details,
-                    'product_exists' => $product ? true : false,
-                    'product_active' => $product ? $product->is_active : false,
-                    'current_stock' => $product ? $product->stock_quantity : 0,
-                    'size_info' => [
-                        'cart_size' => $details['size'] ?? 'not_set',
-                        'product_available_sizes' => $product ? $product->available_sizes : null,
-                        'size_type' => $details['size'] ? gettype($details['size']) : 'null'
-                    ]
-                ]);
-            }
-            
-            return response()->json([
-                'session_cart_raw' => $cart,
-                'processed_items' => $cartItems,
-                'total_items' => count($cart),
-                'session_id' => session()->getId(),
-                'csrf_token' => csrf_token()
-            ], 200, [], JSON_PRETTY_PRINT);
-        })->name('debug.cart');
-
-        Route::get('/cart/clear', function() {
-            Session::flush();
-            return response()->json(['message' => 'Session cleared', 'timestamp' => now()]);
-        })->name('debug.cart.clear');
-
-        // Shipping debug
-        Route::prefix('shipping')->group(function() {
-            Route::get('/test', function() {
-                $apiKey = env('RAJAONGKIR_API_KEY');
-                $baseUrl = env('RAJAONGKIR_BASE_URL', 'https://rajaongkir.komerce.id/api/v1');
-                
-                return response()->json([
-                    'environment' => app()->environment(),
-                    'api_configured' => !empty($apiKey),
-                    'api_key_preview' => $apiKey ? substr($apiKey, 0, 8) . '...' : 'NOT SET',
-                    'base_url' => $baseUrl,
-                    'origin_id' => env('STORE_ORIGIN_CITY_ID'),
-                    'origin_name' => env('STORE_ORIGIN_CITY_NAME'),
-                    'timestamp' => now()->toISOString()
-                ]);
-            })->name('debug.shipping.test');
-            
-            Route::post('/direct-test', function(Request $request) {
-                $apiKey = env('RAJAONGKIR_API_KEY');
-                $baseUrl = env('RAJAONGKIR_BASE_URL', 'https://rajaongkir.komerce.id/api/v1');
-                $originId = env('STORE_ORIGIN_CITY_ID', 17549);
-                
-                $destinationId = $request->input('destination_id', '66274');
-                $weight = $request->input('weight', 1000);
-                
-                try {
-                    Log::info('🧪 Debug direct shipping test', [
-                        'destination_id' => $destinationId,
-                        'weight' => $weight,
-                        'origin_id' => $originId
-                    ]);
-                    
-                    $startTime = microtime(true);
-                    
-                    $response = Http::asForm()
-                        ->withHeaders([
-                            'accept' => 'application/json',
-                            'key' => $apiKey
-                        ])
-                        ->timeout(30)
-                        ->post($baseUrl . '/calculate/domestic-cost', [
-                            'origin' => $originId,
-                            'destination' => $destinationId,
-                            'weight' => $weight,
-                            'courier' => 'jne'
-                        ]);
-                    
-                    $executionTime = round((microtime(true) - $startTime) * 1000, 2);
-                    
-                    return response()->json([
-                        'success' => $response->successful(),
-                        'status_code' => $response->status(),
-                        'execution_time_ms' => $executionTime,
-                        'response_data' => $response->successful() ? $response->json() : null,
-                        'error_response' => !$response->successful() ? $response->body() : null,
-                        'request_data' => [
-                            'origin' => $originId,
-                            'destination' => $destinationId,
-                            'weight' => $weight,
-                            'courier' => 'jne'
-                        ],
-                        'config' => [
-                            'api_url' => $baseUrl . '/calculate/domestic-cost',
-                            'api_key_set' => !empty($apiKey)
-                        ]
-                    ]);
-                    
-                } catch (\Exception $e) {
-                    return response()->json([
-                        'success' => false,
-                        'error' => $e->getMessage(),
-                        'error_type' => get_class($e)
-                    ], 500);
-                }
-            })->name('debug.shipping.direct-test');
-        });
-    });
-}
 
 // =====================================
 // REDIRECTS & FALLBACKS
@@ -583,3 +534,141 @@ Route::get('/auth/apple', function() {
 Route::get('/auth/apple/callback', function() {
     return redirect()->route('login')->with('info', 'Apple authentication callback');
 })->name('auth.apple.callback');
+
+// =====================================
+// DEBUG ROUTES (Only in local/staging)
+// =====================================
+if (app()->environment(['local', 'staging'])) {
+    
+    Route::prefix('debug')->group(function() {
+        // Cart debug
+        Route::get('/cart', function() {
+            $cart = Session::get('cart', []);
+            $cartItems = collect();
+            
+            foreach ($cart as $cartKey => $details) {
+                $productId = $details['product_id'] ?? null;
+                $product = null;
+                
+                if ($productId) {
+                    $product = \App\Models\Product::find($productId);
+                }
+                
+                $cartItems->push([
+                    'cart_key' => $cartKey,
+                    'raw_data' => $details,
+                    'product_exists' => $product ? true : false,
+                    'product_active' => $product ? $product->is_active : false,
+                    'current_stock' => $product ? $product->stock_quantity : 0,
+                    'size_info' => [
+                        'cart_size' => $details['size'] ?? 'not_set',
+                        'product_available_sizes' => $product ? $product->available_sizes : null,
+                        'size_type' => $details['size'] ? gettype($details['size']) : 'null'
+                    ]
+                ]);
+            }
+            
+            return response()->json([
+                'session_cart_raw' => $cart,
+                'processed_items' => $cartItems,
+                'total_items' => count($cart),
+                'session_id' => session()->getId(),
+                'csrf_token' => csrf_token()
+            ], 200, [], JSON_PRETTY_PRINT);
+        })->name('debug.cart');
+
+        Route::get('/cart/clear', function() {
+            Session::flush();
+            return response()->json(['message' => 'Session cleared', 'timestamp' => now()]);
+        })->name('debug.cart.clear');
+
+        // Shipping debug (RajaOngkir)
+        Route::prefix('shipping')->group(function() {
+            Route::get('/test', function() {
+                $apiKey = env('RAJAONGKIR_API_KEY');
+                $baseUrl = env('RAJAONGKIR_BASE_URL', 'https://rajaongkir.komerce.id/api/v1');
+                
+                return response()->json([
+                    'environment' => app()->environment(),
+                    'api_configured' => !empty($apiKey),
+                    'api_key_preview' => $apiKey ? substr($apiKey, 0, 8) . '...' : 'NOT SET',
+                    'base_url' => $baseUrl,
+                    'origin_id' => env('STORE_ORIGIN_CITY_ID'),
+                    'origin_name' => env('STORE_ORIGIN_CITY_NAME'),
+                    'timestamp' => now()->toISOString()
+                ]);
+            })->name('debug.shipping.test');
+            
+            Route::post('/direct-test', function(Request $request) {
+                $apiKey = env('RAJAONGKIR_API_KEY');
+                $baseUrl = env('RAJAONGKIR_BASE_URL', 'https://rajaongkir.komerce.id/api/v1');
+                $originId = env('STORE_ORIGIN_CITY_ID', 17549);
+                
+                $destinationId = $request->input('destination_id', '66274');
+                $weight = $request->input('weight', 1000);
+                
+                try {
+                    Log::info('🧪 Debug direct shipping test', [
+                        'destination_id' => $destinationId,
+                        'weight' => $weight,
+                        'origin_id' => $originId
+                    ]);
+                    
+                    $startTime = microtime(true);
+                    
+                    $response = Http::asForm()
+                        ->withHeaders([
+                            'accept' => 'application/json',
+                            'key' => $apiKey
+                        ])
+                        ->timeout(30)
+                        ->post($baseUrl . '/calculate/domestic-cost', [
+                            'origin' => $originId,
+                            'destination' => $destinationId,
+                            'weight' => $weight,
+                            'courier' => 'jne'
+                        ]);
+                    
+                    $executionTime = round((microtime(true) - $startTime) * 1000, 2);
+                    
+                    return response()->json([
+                        'success' => $response->successful(),
+                        'status_code' => $response->status(),
+                        'execution_time_ms' => $executionTime,
+                        'response_data' => $response->successful() ? $response->json() : null,
+                        'error_response' => !$response->successful() ? $response->body() : null,
+                        'request_data' => [
+                            'origin' => $originId,
+                            'destination' => $destinationId,
+                            'weight' => $weight,
+                            'courier' => 'jne'
+                        ],
+                        'config' => [
+                            'api_url' => $baseUrl . '/calculate/domestic-cost',
+                            'api_key_set' => !empty($apiKey)
+                        ]
+                    ]);
+                    
+                } catch (\Exception $e) {
+                    return response()->json([
+                        'success' => false,
+                        'error' => $e->getMessage(),
+                        'error_type' => get_class($e)
+                    ], 500);
+                }
+            })->name('debug.shipping.direct-test');
+        });
+    });
+}
+
+// Environment test route  
+Route::get('/env-test', function() {
+    return response()->json([
+        'KOMERCE_API_KEY' => env('KOMERCE_API_KEY'),
+        'KOMERCE_BASE_URL' => env('KOMERCE_BASE_URL'), 
+        'STORE_ORIGIN_DESTINATION_ID' => env('STORE_ORIGIN_DESTINATION_ID'),
+        'APP_ENV' => env('APP_ENV'),
+        'config_cache_exists' => file_exists(base_path('bootstrap/cache/config.php')),
+        'env_file_exists' => file_exists(base_path('.env')),
+    ]);
+})->name('debug.env.test');
