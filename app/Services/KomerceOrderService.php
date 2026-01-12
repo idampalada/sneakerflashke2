@@ -11,281 +11,25 @@ class KomerceOrderService
     private $apiKey;
     private $baseUrl;
     private $timeout;
+    private $shipperDestinationId;
 
     public function __construct()
     {
         $this->apiKey = env('KOMERCE_API_KEY', 'VDiLWH4R48172606d28bde1a3dHKapOZ');
         $this->baseUrl = env('KOMERCE_BASE_URL', 'https://api-sandbox.collaborator.komerce.id');
         $this->timeout = env('KOMERCE_TIMEOUT', 30);
+        $this->shipperDestinationId = env('KOMERCE_SHIPPER_DESTINATION_ID', '17485');
         
         Log::info('Komerce Order Service initialized', [
             'base_url' => $this->baseUrl,
             'timeout' => $this->timeout,
+            'shipper_destination_id' => $this->shipperDestinationId,
             'api_key_set' => !empty($this->apiKey)
         ]);
     }
 
     /**
-     * Create order in Komerce system
-     * 
-     * @param array $orderData
-     * @return array
-     */
-    public function createOrder($orderData)
-    {
-        try {
-            Log::info('📦 Komerce: Creating order', [
-                'shipper_destination_id' => $orderData['shipper_destination_id'] ?? null,
-                'receiver_destination_id' => $orderData['receiver_destination_id'] ?? null,
-                'grand_total' => $orderData['grand_total'] ?? 0,
-                'items_count' => count($orderData['order_details'] ?? [])
-            ]);
-
-            // Validate required fields
-            $this->validateOrderData($orderData);
-
-            // Set default values
-            $orderData = $this->setOrderDefaults($orderData);
-
-            $startTime = microtime(true);
-
-            $response = Http::withHeaders([
-                'x-api-key' => $this->apiKey,
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json'
-            ])
-            ->timeout($this->timeout)
-            ->retry(2, 1000)
-            ->post($this->baseUrl . '/order/api/v1/orders/store', $orderData);
-
-            $executionTime = round((microtime(true) - $startTime) * 1000, 2);
-
-            Log::info('📡 Komerce Order API Response', [
-                'status_code' => $response->status(),
-                'successful' => $response->successful(),
-                'execution_time_ms' => $executionTime,
-                'response_size' => strlen($response->body())
-            ]);
-
-            if (!$response->successful()) {
-                $errorBody = $response->body();
-                $statusCode = $response->status();
-                
-                Log::error('❌ Komerce Order Creation Failed', [
-                    'status_code' => $statusCode,
-                    'error_response' => $errorBody,
-                    'order_data' => $orderData
-                ]);
-
-                return [
-                    'success' => false,
-                    'error' => 'ORDER_CREATION_FAILED',
-                    'message' => $this->getErrorMessage($statusCode),
-                    'debug' => [
-                        'api_status' => $statusCode,
-                        'api_response' => $errorBody,
-                        'execution_time_ms' => $executionTime
-                    ]
-                ];
-            }
-
-            $data = $response->json();
-            
-            Log::info('✅ Komerce Order Created Successfully', [
-                'order_no' => $data['order_no'] ?? 'unknown',
-                'status' => $data['status'] ?? 'unknown',
-                'execution_time_ms' => $executionTime
-            ]);
-
-            return [
-                'success' => true,
-                'data' => $data,
-                'execution_time_ms' => $executionTime
-            ];
-
-        } catch (\Exception $e) {
-            Log::error('❌ Komerce Order Creation Error', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'order_data' => $orderData ?? null
-            ]);
-
-            return [
-                'success' => false,
-                'error' => 'ORDER_CREATION_ERROR',
-                'message' => 'Failed to create order: ' . $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * Request pickup for orders
-     * 
-     * @param string $pickupDate (Y-m-d format)
-     * @param string $pickupTime (H:i format)
-     * @param array $orderNumbers
-     * @param string $pickupVehicle (Motor/Mobil)
-     * @return array
-     */
-    public function requestPickup($pickupDate, $pickupTime, $orderNumbers, $pickupVehicle = 'Motor')
-    {
-        try {
-            Log::info('🚚 Komerce: Requesting pickup', [
-                'pickup_date' => $pickupDate,
-                'pickup_time' => $pickupTime,
-                'pickup_vehicle' => $pickupVehicle,
-                'orders_count' => count($orderNumbers)
-            ]);
-
-            $pickupData = [
-                'pickup_vehicle' => $pickupVehicle,
-                'pickup_time' => $pickupTime,
-                'pickup_date' => $pickupDate,
-                'orders' => array_map(function($orderNo) {
-                    return ['order_no' => $orderNo];
-                }, $orderNumbers)
-            ];
-
-            $startTime = microtime(true);
-
-            $response = Http::withHeaders([
-                'x-api-key' => $this->apiKey,
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json'
-            ])
-            ->timeout($this->timeout)
-            ->post($this->baseUrl . '/order/api/v1/pickup/request', $pickupData);
-
-            $executionTime = round((microtime(true) - $startTime) * 1000, 2);
-
-            Log::info('📡 Komerce Pickup Request Response', [
-                'status_code' => $response->status(),
-                'successful' => $response->successful(),
-                'execution_time_ms' => $executionTime
-            ]);
-
-            if (!$response->successful()) {
-                $errorBody = $response->body();
-                Log::error('❌ Komerce Pickup Request Failed', [
-                    'status_code' => $response->status(),
-                    'error_response' => $errorBody,
-                    'pickup_data' => $pickupData
-                ]);
-
-                return [
-                    'success' => false,
-                    'error' => 'PICKUP_REQUEST_FAILED',
-                    'message' => $this->getErrorMessage($response->status())
-                ];
-            }
-
-            $data = $response->json();
-            
-            Log::info('✅ Komerce Pickup Requested Successfully', [
-                'pickup_id' => $data['pickup_id'] ?? 'unknown',
-                'status' => $data['status'] ?? 'unknown',
-                'execution_time_ms' => $executionTime
-            ]);
-
-            return [
-                'success' => true,
-                'data' => $data,
-                'execution_time_ms' => $executionTime
-            ];
-
-        } catch (\Exception $e) {
-            Log::error('❌ Komerce Pickup Request Error', [
-                'error' => $e->getMessage(),
-                'pickup_data' => $pickupData ?? null
-            ]);
-
-            return [
-                'success' => false,
-                'error' => 'PICKUP_REQUEST_ERROR',
-                'message' => 'Failed to request pickup: ' . $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * Cancel order
-     * 
-     * @param string $orderNo
-     * @return array
-     */
-    public function cancelOrder($orderNo)
-    {
-        try {
-            Log::info('❌ Komerce: Canceling order', [
-                'order_no' => $orderNo
-            ]);
-
-            $cancelData = [
-                'order_no' => $orderNo
-            ];
-
-            $startTime = microtime(true);
-
-            $response = Http::withHeaders([
-                'x-api-key' => $this->apiKey,
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json'
-            ])
-            ->timeout($this->timeout)
-            ->put($this->baseUrl . '/order/api/v1/orders/cancel', $cancelData);
-
-            $executionTime = round((microtime(true) - $startTime) * 1000, 2);
-
-            Log::info('📡 Komerce Cancel Order Response', [
-                'status_code' => $response->status(),
-                'successful' => $response->successful(),
-                'execution_time_ms' => $executionTime
-            ]);
-
-            if (!$response->successful()) {
-                Log::error('❌ Komerce Order Cancellation Failed', [
-                    'status_code' => $response->status(),
-                    'error_response' => $response->body(),
-                    'order_no' => $orderNo
-                ]);
-
-                return [
-                    'success' => false,
-                    'error' => 'ORDER_CANCELLATION_FAILED',
-                    'message' => $this->getErrorMessage($response->status())
-                ];
-            }
-
-            $data = $response->json();
-            
-            Log::info('✅ Komerce Order Canceled Successfully', [
-                'order_no' => $orderNo,
-                'status' => $data['status'] ?? 'canceled',
-                'execution_time_ms' => $executionTime
-            ]);
-
-            return [
-                'success' => true,
-                'data' => $data,
-                'execution_time_ms' => $executionTime
-            ];
-
-        } catch (\Exception $e) {
-            Log::error('❌ Komerce Order Cancellation Error', [
-                'error' => $e->getMessage(),
-                'order_no' => $orderNo
-            ]);
-
-            return [
-                'success' => false,
-                'error' => 'ORDER_CANCELLATION_ERROR',
-                'message' => 'Failed to cancel order: ' . $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * Generate and get shipping label
+     * ✅ FIXED: Generate and get shipping label
      * 
      * @param string $orderNo
      * @param string $pageSize (page_2, page_4, etc.)
@@ -301,23 +45,41 @@ class KomerceOrderService
 
             $startTime = microtime(true);
 
+            // ✅ FIXED: POST with query parameters (like your Postman example)
+            $queryParams = [
+                'order_no' => $orderNo,
+                'page' => $pageSize
+            ];
+            
+            $url = $this->baseUrl . '/order/api/v1/orders/print-label?' . http_build_query($queryParams);
+
+            Log::info('📡 Komerce Print Label Request', [
+                'url' => $url,
+                'method' => 'POST',
+                'headers' => [
+                    'x-api-key' => 'VDiLWH4R...', // Masked
+                    'Accept' => 'application/pdf'
+                ],
+                'query_params' => $queryParams
+            ]);
+
+            // ✅ CORRECT: POST with query parameters in URL (exactly like your Postman)
             $response = Http::withHeaders([
                 'x-api-key' => $this->apiKey,
                 'Accept' => 'application/pdf'
             ])
             ->timeout($this->timeout)
-            ->post($this->baseUrl . '/order/api/v1/orders/print-label', [
-                'order_no' => $orderNo,
-                'page' => $pageSize
-            ]);
+            ->post($url); // No body, just query params in URL
 
             $executionTime = round((microtime(true) - $startTime) * 1000, 2);
 
-            Log::info('📡 Komerce Print Label Response', [
+            Log::info('📡 Komerce Print Label Full Response', [
                 'status_code' => $response->status(),
                 'successful' => $response->successful(),
                 'content_type' => $response->header('content-type'),
                 'response_size' => strlen($response->body()),
+                'response_headers' => $response->headers(),
+                'raw_response' => substr($response->body(), 0, 500), // First 500 chars
                 'execution_time_ms' => $executionTime
             ]);
 
@@ -325,7 +87,8 @@ class KomerceOrderService
                 Log::error('❌ Komerce Label Generation Failed', [
                     'status_code' => $response->status(),
                     'error_response' => $response->body(),
-                    'order_no' => $orderNo
+                    'order_no' => $orderNo,
+                    'url' => $url
                 ]);
 
                 return [
@@ -335,39 +98,101 @@ class KomerceOrderService
                 ];
             }
 
-            // Check if response is PDF
+            // ✅ Check response content type
             $contentType = $response->header('content-type');
+            $responseBody = $response->body();
+
+            Log::info('📊 Komerce Response Analysis', [
+                'content_type' => $contentType,
+                'body_length' => strlen($responseBody),
+                'is_pdf' => strpos($contentType, 'application/pdf') !== false,
+                'is_json' => strpos($contentType, 'application/json') !== false,
+                'body_preview' => substr($responseBody, 0, 100)
+            ]);
+
+            // Handle PDF response
             if (strpos($contentType, 'application/pdf') !== false) {
-                Log::info('✅ Komerce Label Generated Successfully', [
+                Log::info('✅ Komerce Label Generated Successfully (PDF)', [
                     'order_no' => $orderNo,
-                    'pdf_size' => strlen($response->body()),
+                    'pdf_size' => strlen($responseBody),
                     'execution_time_ms' => $executionTime
                 ]);
 
                 return [
                     'success' => true,
                     'data' => [
-                        'pdf_content' => base64_encode($response->body()),
+                        'pdf_content' => base64_encode($responseBody),
                         'content_type' => $contentType,
-                        'filename' => 'label_' . $orderNo . '.pdf'
+                        'filename' => 'label_' . $orderNo . '.pdf',
+                        'order_no' => $orderNo,
+                        'generated_at' => now()->toISOString()
                     ],
-                    'execution_time_ms' => $executionTime
-                ];
-            } else {
-                // Response might be JSON with error or success info
-                $data = $response->json();
-                
-                return [
-                    'success' => true,
-                    'data' => $data,
                     'execution_time_ms' => $executionTime
                 ];
             }
 
+            // Handle JSON response (might contain URL or error)
+            if (strpos($contentType, 'application/json') !== false || $this->isJsonString($responseBody)) {
+                try {
+                    $data = $response->json();
+                    
+                    Log::info('📊 Komerce JSON Response Analysis', [
+                        'response_structure' => $data,
+                        'has_meta' => isset($data['meta']),
+                        'has_data' => isset($data['data']),
+                        'meta_content' => $data['meta'] ?? null,
+                        'data_content' => $data['data'] ?? null
+                    ]);
+
+                    // Check if it's success response with label info
+                    if (isset($data['meta']['status']) && $data['meta']['status'] === 'success') {
+                        return [
+                            'success' => true,
+                            'data' => array_merge($data['data'] ?? [], [
+                                'order_no' => $orderNo,
+                                'generated_at' => now()->toISOString()
+                            ]),
+                            'execution_time_ms' => $executionTime
+                        ];
+                    } else {
+                        return [
+                            'success' => false,
+                            'error' => 'LABEL_GENERATION_FAILED',
+                            'message' => $data['meta']['message'] ?? 'Unknown error in JSON response',
+                            'data' => $data
+                        ];
+                    }
+                } catch (\Exception $jsonError) {
+                    Log::error('❌ Failed to parse JSON response', [
+                        'json_error' => $jsonError->getMessage(),
+                        'raw_response' => $responseBody
+                    ]);
+                }
+            }
+
+            // Fallback: assume success but unknown format
+            Log::warning('⚠️ Unknown response format, treating as success', [
+                'content_type' => $contentType,
+                'response_preview' => substr($responseBody, 0, 200)
+            ]);
+
+            return [
+                'success' => true,
+                'data' => [
+                    'raw_response' => $responseBody,
+                    'content_type' => $contentType,
+                    'order_no' => $orderNo,
+                    'generated_at' => now()->toISOString(),
+                    'note' => 'Unknown response format - check Komerce dashboard'
+                ],
+                'execution_time_ms' => $executionTime
+            ];
+
         } catch (\Exception $e) {
             Log::error('❌ Komerce Label Generation Error', [
                 'error' => $e->getMessage(),
-                'order_no' => $orderNo
+                'order_no' => $orderNo,
+                'trace' => $e->getTraceAsString()
             ]);
 
             return [
@@ -379,11 +204,206 @@ class KomerceOrderService
     }
 
     /**
+     * Create order in Komerce system
+     */
+    public function createOrder($orderData)
+    {
+        try {
+            Log::info('📦 Komerce: Creating order', [
+                'shipper_destination_id' => $orderData['shipper_destination_id'] ?? null,
+                'receiver_destination_id' => $orderData['receiver_destination_id'] ?? null,
+                'grand_total' => $orderData['grand_total'] ?? 0,
+                'items_count' => count($orderData['order_details'] ?? [])
+            ]);
+
+            $this->validateOrderData($orderData);
+            $orderData = $this->setOrderDefaults($orderData);
+
+            $startTime = microtime(true);
+
+            $response = Http::withHeaders([
+                'x-api-key' => $this->apiKey,
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json'
+            ])
+            ->timeout($this->timeout)
+            ->retry(2, 1000)
+            ->post($this->baseUrl . '/order/api/v1/orders/store', $orderData);
+
+            $executionTime = round((microtime(true) - $startTime) * 1000, 2);
+
+            if (!$response->successful()) {
+                Log::error('❌ Komerce Order Creation Failed', [
+                    'status_code' => $response->status(),
+                    'error_response' => $response->body()
+                ]);
+
+                return [
+                    'success' => false,
+                    'error' => 'ORDER_CREATION_FAILED',
+                    'message' => $this->getErrorMessage($response->status())
+                ];
+            }
+
+            $data = $response->json();
+            
+            Log::info('✅ Komerce Order Created Successfully', [
+                'order_no' => $data['data']['order_no'] ?? 'unknown',
+                'status' => $data['data']['status'] ?? 'unknown',
+                'execution_time_ms' => $executionTime
+            ]);
+
+            return [
+                'success' => true,
+                'data' => $data['data'],
+                'execution_time_ms' => $executionTime
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('❌ Komerce Order Creation Error', [
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => 'ORDER_CREATION_ERROR',
+                'message' => 'Failed to create order: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Request pickup for orders
+     */
+    public function requestPickup($pickupDate, $pickupTime, $orderNumbers, $pickupVehicle = 'Motor')
+    {
+        try {
+            if (is_string($orderNumbers)) {
+                $orderNumbers = [$orderNumbers];
+            }
+
+            Log::info('🚚 Komerce: Requesting pickup DEBUG', [
+                'pickup_date' => $pickupDate,
+                'pickup_time' => $pickupTime,
+                'pickup_vehicle' => $pickupVehicle,
+                'order_numbers' => $orderNumbers,
+                'orders_count' => count($orderNumbers)
+            ]);
+
+            $orders = array_map(function($orderNo) {
+                return ['order_no' => $orderNo];
+            }, $orderNumbers);
+
+            $payload = [
+                'pickup_vehicle' => $pickupVehicle,
+                'pickup_time' => $pickupTime,
+                'pickup_date' => $pickupDate,
+                'orders' => $orders
+            ];
+
+            Log::info('📡 Komerce Pickup Payload', [
+                'url' => $this->baseUrl . '/order/api/v1/pickup/request',
+                'method' => 'POST',
+                'headers' => [
+                    'x-api-key' => $this->apiKey,
+                    'Content-Type' => 'application/json'
+                ],
+                'payload' => $payload
+            ]);
+
+            $startTime = microtime(true);
+
+            $response = Http::withHeaders([
+                'x-api-key' => $this->apiKey,
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json'
+            ])
+            ->timeout($this->timeout)
+            ->post($this->baseUrl . '/order/api/v1/pickup/request', $payload);
+
+            $executionTime = round((microtime(true) - $startTime) * 1000, 2);
+
+            Log::info('📡 Komerce Pickup Full Response', [
+                'status_code' => $response->status(),
+                'response_headers' => $response->headers(),
+                'raw_response' => $response->body(),
+                'json_response' => $response->json(),
+                'execution_time_ms' => $executionTime
+            ]);
+
+            if (!$response->successful()) {
+                Log::error('❌ Komerce Pickup Request Failed', [
+                    'status_code' => $response->status(),
+                    'error_response' => $response->body()
+                ]);
+
+                return [
+                    'success' => false,
+                    'error' => 'PICKUP_REQUEST_FAILED',
+                    'message' => $this->getErrorMessage($response->status())
+                ];
+            }
+
+            $data = $response->json();
+
+            Log::info('📊 Komerce Response Structure Analysis', [
+                'has_meta' => isset($data['meta']),
+                'has_data' => isset($data['data']),
+                'meta_content' => $data['meta'] ?? null,
+                'data_content' => $data['data'] ?? null,
+                'data_type' => gettype($data['data'] ?? null),
+                'data_count' => is_array($data['data'] ?? null) ? count($data['data']) : 0
+            ]);
+
+            if (isset($data['data']) && is_array($data['data']) && count($data['data']) > 0) {
+                $firstOrder = $data['data'][0];
+                
+                Log::info('📋 Komerce Response Parsing', [
+                    'response_data_type' => 'array',
+                    'first_order' => $firstOrder,
+                    'extracted_status' => $firstOrder['status'] ?? 'unknown',
+                    'extracted_awb' => $firstOrder['awb'] ?? null,
+                    'extracted_order_no' => $firstOrder['order_no'] ?? null
+                ]);
+
+                return [
+                    'success' => true,
+                    'data' => [
+                        'status' => $firstOrder['status'] ?? 'success',
+                        'awb' => $firstOrder['awb'] ?? null,
+                        'airway_bill' => $firstOrder['awb'] ?? null,
+                        'order_no' => $firstOrder['order_no'] ?? null,
+                        'pickup_date' => $pickupDate,
+                        'pickup_time' => $pickupTime,
+                        'all_orders' => $data['data']
+                    ],
+                    'execution_time_ms' => $executionTime
+                ];
+            }
+
+            return [
+                'success' => true,
+                'data' => $data,
+                'execution_time_ms' => $executionTime
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('❌ Komerce Pickup Request Error', [
+                'error' => $e->getMessage(),
+                'pickup_date' => $pickupDate,
+                'order_numbers' => $orderNumbers ?? []
+            ]);
+
+            return [
+                'success' => false,
+                'error' => 'PICKUP_REQUEST_ERROR',
+                'message' => 'Failed to request pickup: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
      * Track shipment using airway bill
-     * 
-     * @param string $airwayBill
-     * @param string $shipping (JNE, TIKI, POS, etc.)
-     * @return array
      */
     public function trackShipment($airwayBill, $shipping = 'JNE')
     {
@@ -409,20 +429,7 @@ class KomerceOrderService
 
             $executionTime = round((microtime(true) - $startTime) * 1000, 2);
 
-            Log::info('📡 Komerce Track Shipment Response', [
-                'status_code' => $response->status(),
-                'successful' => $response->successful(),
-                'execution_time_ms' => $executionTime
-            ]);
-
             if (!$response->successful()) {
-                Log::error('❌ Komerce Shipment Tracking Failed', [
-                    'status_code' => $response->status(),
-                    'error_response' => $response->body(),
-                    'airway_bill' => $airwayBill,
-                    'shipping' => $shipping
-                ]);
-
                 return [
                     'success' => false,
                     'error' => 'TRACKING_FAILED',
@@ -432,13 +439,6 @@ class KomerceOrderService
 
             $data = $response->json();
             
-            Log::info('✅ Komerce Shipment Tracking Retrieved', [
-                'airway_bill' => $airwayBill,
-                'tracking_count' => count($data['tracking'] ?? []),
-                'current_status' => $data['current_status'] ?? 'unknown',
-                'execution_time_ms' => $executionTime
-            ]);
-
             return [
                 'success' => true,
                 'data' => $data,
@@ -446,17 +446,21 @@ class KomerceOrderService
             ];
 
         } catch (\Exception $e) {
-            Log::error('❌ Komerce Shipment Tracking Error', [
-                'error' => $e->getMessage(),
-                'airway_bill' => $airwayBill
-            ]);
-
             return [
                 'success' => false,
                 'error' => 'TRACKING_ERROR',
                 'message' => 'Failed to track shipment: ' . $e->getMessage()
             ];
         }
+    }
+
+    /**
+     * Helper: Check if string is valid JSON
+     */
+    private function isJsonString($string)
+    {
+        json_decode($string);
+        return json_last_error() === JSON_ERROR_NONE;
     }
 
     /**

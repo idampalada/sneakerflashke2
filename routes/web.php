@@ -248,6 +248,12 @@ Route::prefix('checkout')->name('checkout.')->group(function () {
     Route::get('/finish', [CheckoutController::class, 'paymentFinish'])->name('finish');
     Route::get('/unfinish', [CheckoutController::class, 'paymentUnfinish'])->name('unfinish');
     Route::get('/error', [CheckoutController::class, 'paymentError'])->name('error');
+
+    // Komerce integration for CheckoutController
+Route::post('/create-komerce-order', [CheckoutController::class, 'createKomerceOrderAfterPayment'])
+    ->name('create-komerce-order')->middleware('auth');
+Route::get('/test-komerce', [CheckoutController::class, 'testKomerceAPI'])
+    ->name('test-komerce');
 });
 
 // =====================================
@@ -385,6 +391,8 @@ Route::prefix('api')->name('api.')->group(function() {
             Route::post('/request-pickup', [OrderController::class, 'requestKomercePickup'])->name('pickup');
             Route::post('/generate-label', [OrderController::class, 'generateKomerceLabel'])->name('label');
             Route::get('/track-shipment', [OrderController::class, 'trackKomerceShipment'])->name('track');
+            // Di dalam Route::middleware('auth')->prefix('orders')->name('orders.')
+Route::put('/cancel-order', [OrderController::class, 'cancelKomerceOrder'])->name('cancel');
         });
     });
     

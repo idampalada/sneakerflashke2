@@ -11,6 +11,7 @@ use App\Models\UserAddress;
 use App\Services\MidtransService;
 use App\Services\RajaOngkirService;
 use App\Services\KomerceShippingService;
+use App\Services\KomerceOrderService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -27,13 +28,17 @@ class CheckoutController extends Controller
     private $rajaOngkirBaseUrl;
     private $midtransService;
     private $komerceShippingService; // ✅ TAMBAH INI
+    private $komerceOrderService;
 
     public function __construct(
         MidtransService $midtransService,
-        KomerceShippingService $komerceShippingService // ✅ TAMBAH INI
+        KomerceShippingService $komerceShippingService, // ✅ TAMBAH INI
+        KomerceOrderService $komerceOrderService
+        
     ) {
         $this->midtransService = $midtransService;
         $this->komerceShippingService = $komerceShippingService; // ✅ TAMBAH INI
+        $this->komerceOrderService = $komerceOrderService;
         
         // RajaOngkir API V2 via Komerce (keep for backward compatibility)
         $this->rajaOngkirApiKey = config('services.rajaongkir.api_key') ?: env('RAJAONGKIR_API_KEY');
@@ -1015,40 +1020,22 @@ public function getShippingConfig()
 /**
  * Test Komerce API connection
  */
-public function testKomerceAPI(Request $request)
+public function testKomerceAPI()
 {
     try {
-        Log::info('🧪 Testing Komerce API connection');
-        
-        $storeOriginId = env('STORE_ORIGIN_DESTINATION_ID', 17485);
-        $testDestinationId = $request->input('destination_id', 17551);
-        $testWeight = $request->input('weight', 2500);
-        $testValue = $request->input('item_value', 70000);
-        
-        $result = $this->komerceShippingService->calculateShipping(
-            $storeOriginId,
-            $testDestinationId,
-            $testWeight,
-            $testValue,
-            false
-        );
+        $testResult = $this->komerceOrderService->testConnection();
         
         return response()->json([
-            'test_successful' => $result['success'] ?? false,
-            'api_response' => $result,
-            'environment_config' => [
-                'komerce_api_key_set' => !empty(env('KOMERCE_API_KEY')),
-                'komerce_base_url' => env('KOMERCE_BASE_URL'),
-                'store_origin_id' => $storeOriginId
-            ],
+            'komerce_connection' => $testResult,
+            'shipping_test' => $this->komerceShippingService->testConnection(),
+            'environment' => env('APP_ENV'),
             'timestamp' => now()
         ]);
-        
+
     } catch (\Exception $e) {
         return response()->json([
-            'test_successful' => false,
-            'error' => $e->getMessage(),
-            'timestamp' => now()
+            'success' => false,
+            'error' => $e->getMessage()
         ], 500);
     }
 }
@@ -1665,6 +1652,17 @@ public function store(Request $request)
         }
 
         DB::commit();
+
+if (env('KOMERCE_AUTO_CREATE_ON_CHECKOUT', false)) {
+    try {
+        $this->createKomerceOrderAsync($order, $request, $cartItems);
+    } catch (\Exception $e) {
+        Log::warning('Async Komerce order creation failed during checkout', [
+            'order_number' => $order->order_number,
+            'error' => $e->getMessage()
+        ]);
+    }
+}
 
         // Clear session data
         Session::forget(['cart', 'applied_voucher', 'applied_points']);
@@ -2556,8 +2554,24 @@ public function paymentSuccess(Request $request)
     ]);
     
     if ($orderNumber) {
-        // ✅ PERBAIKAN: JANGAN langsung update ke paid
-        // Biarkan webhook yang handle update status
+        $order = Order::where('order_number', $orderNumber)->first();
+        
+        if ($order) {
+            // ✅ UPDATE ORDER STATUS TO PAID FIRST
+            $order->update(['status' => 'paid']);
+            
+            // ✅ AUTO-CREATE IN KOMERCE FOR PAID ORDERS
+            if ($order->status === 'paid') {
+                try {
+                    $this->createKomerceOrderAsync($order);
+                } catch (\Exception $e) {
+                    Log::error('Failed to create Komerce order in paymentSuccess', [
+                        'order_number' => $orderNumber,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+        }
         
         return redirect()->route('checkout.success', ['orderNumber' => $orderNumber])
                        ->with('success', 'Payment completed! We are processing your order.');
@@ -2788,6 +2802,21 @@ public function paymentUnfinish(Request $request)
             'status' => $newStatus,
             'payment_response' => json_encode($notification['raw_notification'] ?? $request->all())
         ]);
+
+        if ($oldStatus !== 'paid' && $newStatus === 'paid' && !$order->komerce_order_no) {
+    try {
+        $this->createKomerceOrderAsync($order);
+        Log::info('Komerce order created after payment confirmation', [
+            'order_number' => $order->order_number,
+            'komerce_order_no' => $order->fresh()->komerce_order_no
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Failed to create Komerce order after payment', [
+            'order_number' => $order->order_number,
+            'error' => $e->getMessage()
+        ]);
+    }
+}
         
         // JIKA STATUS BERUBAH DARI PENDING KE PAID, KURANGI STOK DAN KIRIM KE GINEE
         if ($oldStatus !== 'paid' && $newStatus === 'paid') {
@@ -2983,6 +3012,238 @@ private function filterCheckoutJNEServices($shippingOptions)
     });
     
     return array_values($filtered); // Re-index array
+}
+public function createKomerceOrderAfterPayment(Request $request)
+{
+    try {
+        $order = Order::where('order_number', $request->order_number)->firstOrFail();
+        
+        if (!in_array($order->status, ['paid', 'processing'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Order must be paid before creating in Komerce'
+            ], 422);
+        }
+
+        if ($order->komerce_order_no) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Order already exists in Komerce system'
+            ], 422);
+        }
+
+        $result = $this->createKomerceOrderSync($order);
+
+        return response()->json($result);
+
+    } catch (\Exception $e) {
+        Log::error('❌ Create Komerce order error', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to create order in Komerce'
+        ], 500);
+    }
+}
+private function createKomerceOrderAsync(Order $order): void
+{
+    try {
+        // ✅ PREVENT DUPLICATE: Check if already created in Komerce
+        $existingMeta = json_decode($order->meta_data ?? '{}', true) ?? [];
+        if (isset($existingMeta['komerce_order_id']) && !empty($existingMeta['komerce_order_id'])) {
+            Log::info('⚠️ Komerce order already exists, skipping creation', [
+                'order_number' => $order->order_number,
+                'existing_komerce_id' => $existingMeta['komerce_order_id']
+            ]);
+            return;
+        }
+
+        // ✅ ALSO CHECK komerce_order_no column for double safety
+        if (!empty($order->komerce_order_no)) {
+            Log::info('⚠️ Komerce order already exists (column check), skipping creation', [
+                'order_number' => $order->order_number,
+                'existing_komerce_order_no' => $order->komerce_order_no
+            ]);
+            return;
+        }
+
+        Log::info('🚀 Creating Komerce order asynchronously', [
+            'order_number' => $order->order_number,
+            'order_status' => $order->status
+        ]);
+
+        // Use existing createKomerceOrderSync method
+        $result = $this->createKomerceOrderSync($order);
+
+        if ($result['success']) {
+            Log::info('✅ Komerce order created asynchronously', [
+                'local_order' => $order->order_number,
+                'komerce_order' => $result['komerce_order_no']
+            ]);
+        } else {
+            Log::error('❌ Failed to create Komerce order async', [
+                'local_order' => $order->order_number,
+                'error' => $result['message']
+            ]);
+        }
+
+    } catch (\Exception $e) {
+        Log::error('💥 Exception creating Komerce order async', [
+            'local_order' => $order->order_number,
+            'error' => $e->getMessage()
+        ]);
+    }
+}
+
+private function createKomerceOrderSync($order, $request = null, $orderItems = null)
+{
+    try {
+        // Parse meta_data untuk mendapatkan address info
+        $metaData = json_decode($order->meta_data, true) ?? [];
+        $addressInfo = $metaData['address_info'] ?? [];
+        
+        // Prepare Komerce order data
+        $komerceData = [
+            'order_date' => $order->created_at->format('Y-m-d H:i:s'),
+            'brand_name' => env('STORE_BRAND_NAME', 'Sneakers Flash'),
+            'shipper_name' => env('STORE_SHIPPER_NAME', 'Sneakers Flash Store'),
+            'shipper_phone' => env('STORE_SHIPPER_PHONE', '6281234567890'),
+            'shipper_email' => env('STORE_SHIPPER_EMAIL', 'store@sneakersflash.com'),
+            'shipper_destination_id' => 17485,
+            'shipper_address' => 'Duri Kepa',
+            'receiver_name' => $addressInfo['recipient_name'] ?? $order->customer_name,
+            'receiver_phone' => $addressInfo['phone_recipient'] ?? $order->customer_phone,
+            'receiver_destination_id' => (int) ($order->shipping_destination_id ?? env('KOMERCE_DEFAULT_DESTINATION_ID', 17551)),
+            'receiver_address' => $order->shipping_address,
+            'shipping' => 'JNE',
+            'shipping_type' => 'JNEFlat', 
+            'shipping_cost' => (int) $order->shipping_cost,
+            'shipping_cashback' => 0,
+            'service_fee' => 0,
+            'payment_method' => 'BANK TRANSFER',
+            'additional_cost' => 0,
+            'grand_total' => (int) $order->total_amount,
+            'cod_value' => 0,
+            'insurance_value' => 0,
+            'order_details' => []
+        ];
+
+        // Add order items
+        $items = $orderItems ?? $order->orderItems;
+        foreach ($items as $item) {
+            $komerceData['order_details'][] = [
+                'product_name' => is_array($item) ? $item['name'] : $item->product_name,
+                'product_variant_name' => 'Standard',
+                'product_price' => (int) (is_array($item) ? $item['price'] : $item->product_price),
+                'product_weight' => (int) (is_array($item) ? ($item['weight'] ?? 1000) : ($item->product->weight ?? 1000)),
+                'qty' => (int) (is_array($item) ? $item['quantity'] : $item->quantity),
+                'subtotal' => (int) (is_array($item) ? $item['subtotal'] : $item->total_price)
+            ];
+        }
+
+        // ✅ DEBUG: Log payload being sent
+        Log::info('📄 Komerce order payload prepared', [
+            'has_order_details' => !empty($komerceData['order_details']),
+            'items_count' => count($komerceData['order_details']),
+            'grand_total' => $komerceData['grand_total'],
+            'shipping_cost' => $komerceData['shipping_cost']
+        ]);
+
+        // Create order in Komerce via service
+        $result = $this->komerceOrderService->createOrder($komerceData);
+
+        // ✅ DEBUG: Log full API result
+        Log::info('📡 Komerce Order API Response', [
+            'status_code' => $result['status_code'] ?? 'unknown',
+            'successful' => $result['success'] ?? false,
+            'execution_time_ms' => $result['execution_time_ms'] ?? 0,
+            'response_size' => strlen(json_encode($result)) ?? 0
+        ]);
+
+        if ($result['success']) {
+            // ✅ DEBUG: Analyze response structure
+            $responseData = $result['data'] ?? [];
+            
+            Log::info('📊 Komerce Response Structure Analysis', [
+                'data_keys' => is_array($responseData) ? array_keys($responseData) : 'not_array',
+                'data_type' => gettype($responseData),
+                'full_response_keys' => array_keys($result),
+                'raw_response_data' => $responseData
+            ]);
+
+            // ✅ TRY ALL POSSIBLE ORDER ID FIELDS
+            $possibleOrderIds = [
+                $responseData['order_no'] ?? null,
+                $responseData['orderNo'] ?? null, 
+                $responseData['order_number'] ?? null,
+                $responseData['order_id'] ?? null,
+                $responseData['id'] ?? null,
+                $responseData['no_order'] ?? null,
+                $result['order_no'] ?? null,
+                $result['data']['order_no'] ?? null,
+            ];
+
+            // Filter out nulls and get first valid ID
+            $validIds = array_filter($possibleOrderIds, fn($id) => !empty($id));
+            $komerceOrderNo = !empty($validIds) ? reset($validIds) : 'KOM-' . time();
+
+            // ✅ DEBUG: Log order ID extraction
+            Log::info('🔍 Komerce Order ID Extraction', [
+                'possible_ids' => $possibleOrderIds,
+                'valid_ids' => $validIds,
+                'selected_id' => $komerceOrderNo,
+                'used_fallback' => strpos($komerceOrderNo, 'KOM-17') === 0
+            ]);
+
+            // ✅ SAVE REAL ORDER ID TO META_DATA
+            $existingMeta = json_decode($order->meta_data ?? '{}', true) ?? [];
+            $existingMeta['komerce_order_id'] = $komerceOrderNo;
+            $existingMeta['komerce_created_at'] = now()->toISOString();
+            $existingMeta['komerce_auto_created'] = true;
+
+            // Update local order with Komerce order number AND updated meta_data
+            $order->update([
+                'komerce_order_no' => $komerceOrderNo,
+                'external_order_id' => $komerceOrderNo,
+                'meta_data' => json_encode($existingMeta)
+            ]);
+
+            Log::info('✅ Local order updated with Komerce order number', [
+                'local_order' => $order->order_number,
+                'komerce_order_no' => $komerceOrderNo,
+                'api_response_structure' => array_keys($responseData),
+                'execution_time_ms' => $result['execution_time_ms'] ?? 0
+            ]);
+
+            return [
+                'success' => true,
+                'komerce_order_no' => $komerceOrderNo,
+                'message' => 'Order created in Komerce successfully'
+            ];
+        } else {
+            return [
+                'success' => false,
+                'error' => $result['error'],
+                'message' => $result['message']
+            ];
+        }
+
+    } catch (\Exception $e) {
+        Log::error('❌ Sync Komerce order creation error', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'order_number' => $order->order_number
+        ]);
+
+        return [
+            'success' => false,
+            'error' => 'KOMERCE_ORDER_CREATION_ERROR',
+            'message' => 'Failed to create order in Komerce: ' . $e->getMessage()
+        ];
+    }
 }
 
 }

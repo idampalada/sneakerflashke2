@@ -39,6 +39,8 @@ class Order extends Model
         'snap_token',
         'payment_response',
         'tracking_number',
+                'komerce_awb',
+        'pickup_requested_at', 
         'shipped_at',
         'delivered_at',
         'notes',
@@ -60,6 +62,7 @@ class Order extends Model
         'delivered_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'pickup_requested_at' => 'datetime',
     ];
 
     /**
@@ -661,4 +664,30 @@ public function getSavingsBreakdown(): array
         ]);
     }
 }
+ /**
+     * Check if AWB is available
+     */
+    public function hasAwb(): bool
+    {
+        return !empty($this->komerce_awb);
+    }
+    
+    /**
+     * Check if pickup has been requested
+     */
+    public function hasPickupRequested(): bool
+    {
+        return !empty($this->pickup_requested_at);
+    }
+
+    /**
+     * Check if order is ready for pickup (paid but no pickup requested yet)
+     */
+    public function isReadyForPickup(): bool
+    {
+        $meta = json_decode($this->meta_data ?? '{}', true) ?? [];
+        return $this->status === 'paid' && 
+               isset($meta['komerce_order_id']) && 
+               !$this->hasPickupRequested();
+    }
 }
