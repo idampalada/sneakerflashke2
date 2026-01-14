@@ -23,6 +23,7 @@ use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Auth\VerificationController;
 use App\Http\Controllers\Auth\PasswordResetController;
+use Illuminate\Support\Facades\Storage;
 /*
 |--------------------------------------------------------------------------
 | Web Routes - CLEANED & FIXED
@@ -255,6 +256,27 @@ Route::post('/create-komerce-order', [CheckoutController::class, 'createKomerceO
 Route::get('/test-komerce', [CheckoutController::class, 'testKomerceAPI'])
     ->name('test-komerce');
 });
+// Route untuk download label (tanpa auth)
+Route::get('/komerce/download-label/{order}', function ($order) {
+    $localPath = "komerce-labels/{$order}.pdf";
+    
+    if (Storage::disk('local')->exists($localPath)) {
+        return Storage::disk('local')->download($localPath, "label-{$order}.pdf", [
+            'Content-Type' => 'application/pdf'
+        ]);
+    }
+    
+    // Fallback to session-based PDF if file not found
+    $pdfContent = session('komerce_pdf_' . $order);
+    if ($pdfContent) {
+        return response($pdfContent, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="label-' . $order . '.pdf"'
+        ]);
+    }
+    
+    abort(404, 'PDF not found');
+})->name('checkout.komerce.download-label');
 
 // =====================================
 // AUTHENTICATED USER ROUTES
@@ -394,6 +416,17 @@ Route::prefix('api')->name('api.')->group(function() {
             // Di dalam Route::middleware('auth')->prefix('orders')->name('orders.')
 Route::put('/cancel-order', [OrderController::class, 'cancelKomerceOrder'])->name('cancel');
         });
+        // Route terpisah untuk download label (tidak perlu auth jika menggunakan session)
+Route::get('/komerce/download-label/{order}', function($order) {
+    $pdfContent = session('komerce_pdf_' . $order);
+    if ($pdfContent) {
+        return response($pdfContent)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'attachment; filename="komerce_label_'.$order.'.pdf"');
+    }
+    abort(404);
+})->name('checkout.komerce.download-label');
+
     });
     
     // Payment status
@@ -680,3 +713,33 @@ Route::get('/env-test', function() {
         'env_file_exists' => file_exists(base_path('.env')),
     ]);
 })->name('debug.env.test');
+
+Route::get('/komerce/download-label/{order}', function ($order) {
+    $localPath = "komerce-labels/{$order}.pdf";
+    
+    // Priority 1: Check if file exists in local storage
+    if (Storage::disk('local')->exists($localPath)) {
+        // Force browser download with attachment header
+        return Storage::disk('local')->download($localPath, "komerce-label-{$order}.pdf", [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="komerce-label-' . $order . '.pdf"'
+        ]);
+    }
+    
+    // Priority 2: Fallback to session-based PDF if file not found
+    $pdfContent = session('komerce_pdf_' . $order);
+    if ($pdfContent) {
+        return response($pdfContent, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="komerce-label-' . $order . '.pdf"',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Pragma' => 'no-cache',
+            'Expires' => '0'
+        ]);
+    }
+    
+    // Priority 3: Return 404 if nothing found
+    abort(404, 'PDF label not found for order: ' . $order);
+    
+})->name('checkout.komerce.download-label');
+

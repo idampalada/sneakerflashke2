@@ -12,6 +12,7 @@ use Filament\Resources\Pages\ViewRecord;
 use Filament\Infolists\Infolist;
 use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\TextEntry;
+use Illuminate\Support\Facades\Storage;
 
 class ViewKomerceOrder extends ViewRecord
 {
@@ -85,7 +86,6 @@ class ViewKomerceOrder extends ViewRecord
                                 return 'Ready for pickup request';
                             }),
 
-                        // ✅ AWB FROM DATABASE COLUMN
                         TextEntry::make('komerce_awb')
                             ->label('AWB (Airway Bill)')
                             ->placeholder('Generated after pickup request')
@@ -169,7 +169,7 @@ class ViewKomerceOrder extends ViewRecord
                         ->required(),
                 ])
                 ->action(function (array $data) {
-                    $this->requestPickup($data, $this->getRecord());
+                    $this->requestPickup($data);
                 }),
 
             // Generate Label Action
@@ -182,7 +182,7 @@ class ViewKomerceOrder extends ViewRecord
                     return $record->hasPickupRequested() && !$record->tracking_number;
                 })
                 ->action(function () {
-                    $this->generateLabel($this->getRecord());
+                    $this->generateLabel();
                 }),
 
             // Track Shipment Action
@@ -195,7 +195,7 @@ class ViewKomerceOrder extends ViewRecord
                     return !empty($record->tracking_number);
                 })
                 ->action(function () {
-                    $this->trackShipment($this->getRecord());
+                    $this->trackShipment();
                 }),
 
             // Download Label Action
@@ -208,18 +208,28 @@ class ViewKomerceOrder extends ViewRecord
                     $meta = json_decode($record->meta_data ?? '{}', true) ?? [];
                     return isset($meta['komerce_label']['label_url']);
                 })
-                ->url(function (): string {
-                    $record = $this->getRecord();
-                    $meta = json_decode($record->meta_data ?? '{}', true) ?? [];
-                    return $meta['komerce_label']['label_url'] ?? '#';
-                }, shouldOpenInNewTab: true),
+                ->action(function () {
+                    $this->downloadLabel();
+                }),
         ];
     }
 
+    // =========================================================================
     // HELPER METHODS
-    protected function requestPickup(array $data, Order $record): void
+    // =========================================================================
+
+    /**
+     * Request pickup for the order
+     */
+    protected function requestPickup(array $data): void
     {
         try {
+            \Log::info('🚚 Starting pickup request', [
+                'order_id' => $this->getRecord()->id,
+                'data' => $data
+            ]);
+
+            $record = $this->getRecord();
             $meta = json_decode($record->meta_data ?? '{}', true) ?? [];
             $komerceOrderId = $meta['komerce_order_id'] ?? null;
             
@@ -248,7 +258,7 @@ class ViewKomerceOrder extends ViewRecord
                     return;
                 }
                 
-                // ✅ SAVE AWB & TIMESTAMP TO DATABASE COLUMNS
+                // Save AWB & timestamp to database columns
                 $record->update([
                     'komerce_awb' => $resultData['awb'] ?? null,
                     'pickup_requested_at' => now(),
@@ -274,12 +284,18 @@ class ViewKomerceOrder extends ViewRecord
                     ->success()
                     ->send();
 
-                // Refresh the page
-                $this->redirect($this->getUrl());
+                // Refresh current page properly
+                $this->redirect(static::getUrl('view', ['record' => $record->id]));
             } else {
                 throw new \Exception($result['message'] ?? 'Failed to request pickup');
             }
         } catch (\Exception $e) {
+            \Log::error('Pickup request error', [
+                'order_id' => $this->getRecord()->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             Notification::make()
                 ->title('Error Requesting Pickup')
                 ->body($e->getMessage())
@@ -288,44 +304,144 @@ class ViewKomerceOrder extends ViewRecord
         }
     }
 
-    protected function generateLabel(Order $record): void
+    /**
+     * Generate shipping label for the order
+     */
+    protected function generateLabel(): void
     {
         try {
+            \Log::info('🏷️ Starting label generation', [
+                'order_id' => $this->getRecord()->id,
+                'komerce_order_id' => $this->getKomerceOrderId()
+            ]);
+
+            $record = $this->getRecord();
             $meta = json_decode($record->meta_data ?? '{}', true) ?? [];
             $komerceOrderId = $meta['komerce_order_id'] ?? null;
             
+            if (!$komerceOrderId) {
+                throw new \Exception('Komerce Order ID not found');
+            }
+
             $komerceService = app(KomerceOrderService::class);
             $result = $komerceService->printLabel($komerceOrderId, 'page_2');
 
             if ($result['success']) {
+                $resultData = $result['data'];
+                \Log::info('📊 Label generation successful', ['result_data' => $resultData]);
+
+                // Multi-format support for API response
+                $downloadUrl = null;
+                $awbNumber = null;
+                $pdfFilename = 'komerce_label.pdf';
+
+                // Priority 1: NEW FORMAT (download_url)
+                if (isset($resultData['download_url']) && !empty($resultData['download_url'])) {
+                    $downloadUrl = $resultData['download_url'];
+                    \Log::info('✅ Found download_url field', ['url' => $downloadUrl]);
+                    
+                    // Extract AWB from path if available
+                    if (isset($resultData['path']) && !empty($resultData['path'])) {
+                        $path = $resultData['path'];
+                        $pathInfo = pathinfo($path);
+                        $filename = $pathInfo['filename']; // e.g., label-07-01-2026-21-07-01768193152
+                        
+                        $parts = explode('-', $filename);
+                        if (count($parts) > 1) {
+                            $awbNumber = end($parts); // 01768193152
+                            \Log::info('✅ Extracted AWB from path', ['awb' => $awbNumber]);
+                        }
+                    }
+                    
+                    if (isset($resultData['filename'])) {
+                        $pdfFilename = $resultData['filename'];
+                    }
+                }
+                // Priority 2: FALLBACK (base_64)
+                elseif (isset($resultData['base_64']) && !empty($resultData['base_64'])) {
+                    $base64Pdf = $resultData['base_64'];
+                    \Log::info('✅ Found base_64 field, storing in session');
+                    
+                    // Store in session for download route
+                    session(['komerce_pdf_' . $komerceOrderId => base64_decode($base64Pdf)]);
+                    $downloadUrl = route('checkout.komerce.download-label', ['order' => $komerceOrderId]);
+                    
+                    // Extract AWB from path if available
+                    if (isset($resultData['path'])) {
+                        $pathParts = explode('-', basename($resultData['path'], '.pdf'));
+                        if (count($pathParts) > 1) {
+                            $awbNumber = end($pathParts);
+                        }
+                    }
+                }
+                // Priority 3: FALLBACK (label_url)
+                elseif (isset($resultData['label_url']) && !empty($resultData['label_url'])) {
+                    $downloadUrl = $resultData['label_url'];
+                    $awbNumber = $resultData['airway_bill'] ?? null;
+                    \Log::info('✅ Found label_url field', ['url' => $downloadUrl]);
+                }
+                // Priority 4: FALLBACK - Use existing AWB from pickup
+                if (!$awbNumber) {
+                    // Check existing AWB from pickup
+                    if (isset($meta['komerce_pickup']['awb']) && !empty($meta['komerce_pickup']['awb'])) {
+                        $awbNumber = $meta['komerce_pickup']['awb'];
+                        \Log::info('✅ Using existing AWB from pickup', ['awb' => $awbNumber]);
+                    } elseif (isset($meta['awb']) && !empty($meta['awb'])) {
+                        $awbNumber = $meta['awb'];
+                        \Log::info('✅ Using existing AWB from meta', ['awb' => $awbNumber]);
+                    } elseif (!empty($record->komerce_awb)) {
+                        $awbNumber = $record->komerce_awb;
+                        \Log::info('✅ Using existing AWB from database column', ['awb' => $awbNumber]);
+                    }
+                }
+                
+                if (!$downloadUrl) {
+                    throw new \Exception('No PDF content or label URL found in response. Available fields: ' . implode(', ', array_keys($resultData)));
+                }
+
+                // Update meta_data with label information
                 $meta['komerce_label'] = [
                     'label_generated_at' => now()->toISOString(),
-                    'label_url' => $result['data']['label_url'] ?? null,
-                    'airway_bill' => $result['data']['airway_bill'] ?? null,
+                    'label_url' => $downloadUrl,
+                    'airway_bill' => $awbNumber,
+                    'pdf_filename' => $pdfFilename,
                 ];
                 
+                // Update database
                 $record->update([
                     'meta_data' => json_encode($meta),
-                    'tracking_number' => $result['data']['airway_bill'] ?? null
+                    'tracking_number' => $awbNumber
+                ]);
+
+                \Log::info('✅ Label generation completed successfully', [
+                    'download_url' => $downloadUrl,
+                    'awb' => $awbNumber
                 ]);
 
                 Notification::make()
                     ->title('Label Generated Successfully!')
-                    ->body("Tracking Number: {$result['data']['airway_bill']}")
+                    ->body("Tracking Number: " . ($awbNumber ?: 'Available in download'))
                     ->success()
                     ->actions([
                         \Filament\Notifications\Actions\Action::make('download')
                             ->label('Download Label')
-                            ->url($result['data']['label_url'] ?? '#', shouldOpenInNewTab: true)
+                            ->url($downloadUrl, shouldOpenInNewTab: true)
                     ])
                     ->send();
 
-                // Refresh the page
-                $this->redirect($this->getUrl());
+                // Refresh current page properly
+                $this->redirect(static::getUrl('view', ['record' => $record->id]));
             } else {
                 throw new \Exception($result['message'] ?? 'Failed to generate label');
             }
         } catch (\Exception $e) {
+            \Log::error('Label Generation Error', [
+                'order_id' => $this->getRecord()->id,
+                'komerce_order_id' => $this->getKomerceOrderId(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             Notification::make()
                 ->title('Error Generating Label')
                 ->body($e->getMessage())
@@ -334,11 +450,50 @@ class ViewKomerceOrder extends ViewRecord
         }
     }
 
-    protected function trackShipment(Order $record): void
+    /**
+     * Track shipment status
+     */
+    protected function trackShipment(): void
     {
         try {
+            $record = $this->getRecord();
+            
+            // Get AWB from multiple sources with priority
+            $awbNumber = null;
+            
+            // Priority 1: Database column komerce_awb
+            if (!empty($record->komerce_awb)) {
+                $awbNumber = $record->komerce_awb;
+                \Log::info('✅ Using AWB from komerce_awb column', ['awb' => $awbNumber]);
+            }
+            // Priority 2: Meta data pickup AWB
+            else {
+                $meta = json_decode($record->meta_data ?? '{}', true) ?? [];
+                
+                if (isset($meta['komerce_pickup']['awb']) && !empty($meta['komerce_pickup']['awb'])) {
+                    $awbNumber = $meta['komerce_pickup']['awb'];
+                    \Log::info('✅ Using AWB from pickup meta data', ['awb' => $awbNumber]);
+                }
+                // Priority 3: Meta data root AWB
+                elseif (isset($meta['awb']) && !empty($meta['awb'])) {
+                    $awbNumber = $meta['awb'];
+                    \Log::info('✅ Using AWB from root meta data', ['awb' => $awbNumber]);
+                }
+                // Priority 4: Fallback to tracking_number if no AWB found
+                elseif (!empty($record->tracking_number)) {
+                    $awbNumber = $record->tracking_number;
+                    \Log::info('⚠️ Using tracking_number as fallback AWB', ['awb' => $awbNumber]);
+                }
+            }
+            
+            if (!$awbNumber) {
+                throw new \Exception('No AWB or tracking number available for shipment tracking');
+            }
+
+            \Log::info('🔍 Starting shipment tracking', ['awb' => $awbNumber]);
+
             $komerceService = app(KomerceOrderService::class);
-            $result = $komerceService->trackShipment($record->tracking_number, 'JNE');
+            $result = $komerceService->trackShipment($awbNumber, 'JNE');
 
             if ($result['success']) {
                 $status = $result['data']['status'] ?? 'Unknown';
@@ -353,7 +508,7 @@ class ViewKomerceOrder extends ViewRecord
                 }
                 
                 Notification::make()
-                    ->title("Tracking: {$record->tracking_number}")
+                    ->title("Tracking AWB: {$awbNumber}")
                     ->body($bodyText)
                     ->info()
                     ->duration(10000)
@@ -362,8 +517,154 @@ class ViewKomerceOrder extends ViewRecord
                 throw new \Exception($result['message'] ?? 'Failed to track shipment');
             }
         } catch (\Exception $e) {
+            \Log::error('Track Shipment Error', [
+                'order_id' => $this->getRecord()->id,
+                'error' => $e->getMessage()
+            ]);
+
             Notification::make()
                 ->title('Error Tracking Shipment')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    /**
+     * Get Komerce Order ID helper
+     */
+    private function getKomerceOrderId(): ?string
+    {
+        $meta = json_decode($this->getRecord()->meta_data ?? '{}', true) ?? [];
+        return $meta['komerce_order_id'] ?? null;
+    }
+
+    /**
+     * Download label - triggers API call with logging and stores PDF locally
+     */
+    protected function downloadLabel(): void
+    {
+        try {
+            $record = $this->getRecord();
+            $meta = json_decode($record->meta_data ?? '{}', true) ?? [];
+            $komerceOrderId = $meta['komerce_order_id'] ?? null;
+            
+            if (!$komerceOrderId) {
+                throw new \Exception('Komerce Order ID not found');
+            }
+
+            // Check if we already have a local PDF
+            $localPdfPath = "komerce-labels/{$komerceOrderId}.pdf";
+            
+            if (Storage::disk('local')->exists($localPdfPath)) {
+                \Log::info('📥 Download Label - Using existing local PDF', [
+                    'order_id' => $record->id,
+                    'local_path' => $localPdfPath,
+                    'komerce_order_id' => $komerceOrderId
+                ]);
+
+                // Redirect to download route which will trigger browser download
+                $downloadUrl = route('checkout.komerce.download-label', ['order' => $komerceOrderId]);
+                $this->redirect($downloadUrl);
+                return;
+            }
+
+            \Log::info('📥 Download Label - Generating and storing new PDF locally', [
+                'order_id' => $record->id,
+                'komerce_order_id' => $komerceOrderId
+            ]);
+
+            // Generate new label via API
+            $komerceService = app(KomerceOrderService::class);
+            $result = $komerceService->printLabel($komerceOrderId, 'page_2');
+
+            if ($result['success']) {
+                $resultData = $result['data'];
+                $pdfContent = null;
+                
+                // Priority 1: Use base64 content directly
+                if (isset($resultData['base_64']) && !empty($resultData['base_64'])) {
+                    $pdfContent = base64_decode($resultData['base_64']);
+                    
+                    \Log::info('📥 Using base64 PDF content from API response', [
+                        'pdf_size' => strlen($pdfContent),
+                        'komerce_order_id' => $komerceOrderId
+                    ]);
+                }
+                // Priority 2: Download from provided URL
+                elseif (isset($resultData['download_url']) && !empty($resultData['download_url'])) {
+                    try {
+                        $pdfContent = file_get_contents($resultData['download_url']);
+                        
+                        \Log::info('📥 Downloaded PDF from external URL', [
+                            'download_url' => $resultData['download_url'],
+                            'pdf_size' => strlen($pdfContent),
+                            'komerce_order_id' => $komerceOrderId
+                        ]);
+                    } catch (\Exception $e) {
+                        \Log::error('❌ Failed to download PDF from URL', [
+                            'download_url' => $resultData['download_url'],
+                            'error' => $e->getMessage()
+                        ]);
+                        throw new \Exception('Failed to download PDF from external URL');
+                    }
+                }
+                // Priority 3: Check if we have existing URL in meta
+                elseif (isset($meta['komerce_label']['label_url'])) {
+                    try {
+                        $externalUrl = $meta['komerce_label']['label_url'];
+                        $pdfContent = file_get_contents($externalUrl);
+                        
+                        \Log::info('📥 Downloaded PDF from existing meta URL', [
+                            'existing_url' => $externalUrl,
+                            'pdf_size' => strlen($pdfContent),
+                            'komerce_order_id' => $komerceOrderId
+                        ]);
+                    } catch (\Exception $e) {
+                        \Log::error('❌ Failed to download PDF from meta URL', [
+                            'existing_url' => $meta['komerce_label']['label_url'] ?? 'N/A',
+                            'error' => $e->getMessage()
+                        ]);
+                        throw new \Exception('Failed to download PDF from stored URL');
+                    }
+                }
+
+                if ($pdfContent && strlen($pdfContent) > 0) {
+                    // Store PDF locally
+                    Storage::disk('local')->put($localPdfPath, $pdfContent);
+                    
+                    \Log::info('✅ PDF stored locally successfully', [
+                        'local_path' => $localPdfPath,
+                        'pdf_size' => strlen($pdfContent),
+                        'order_id' => $record->id,
+                        'komerce_order_id' => $komerceOrderId
+                    ]);
+
+                    // Redirect to download route which will trigger browser download
+                    $downloadUrl = route('checkout.komerce.download-label', ['order' => $komerceOrderId]);
+                    $this->redirect($downloadUrl);
+                    
+                    Notification::make()
+                        ->title('Label Downloaded Successfully')
+                        ->body('PDF has been generated and is ready for download.')
+                        ->success()
+                        ->send();
+                } else {
+                    throw new \Exception('No valid PDF content found in API response');
+                }
+            } else {
+                throw new \Exception($result['message'] ?? 'Failed to generate label');
+            }
+
+        } catch (\Exception $e) {
+            \Log::error('❌ Download Label Error', [
+                'order_id' => $this->getRecord()->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            Notification::make()
+                ->title('Error Downloading Label')
                 ->body($e->getMessage())
                 ->danger()
                 ->send();

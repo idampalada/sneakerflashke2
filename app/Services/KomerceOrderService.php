@@ -45,50 +45,39 @@ class KomerceOrderService
 
             $startTime = microtime(true);
 
-            // ✅ FIXED: POST with query parameters (like your Postman example)
-            $queryParams = [
-                'order_no' => $orderNo,
-                'page' => $pageSize
-            ];
-            
-            $url = $this->baseUrl . '/order/api/v1/orders/print-label?' . http_build_query($queryParams);
-
-            Log::info('📡 Komerce Print Label Request', [
-                'url' => $url,
-                'method' => 'POST',
-                'headers' => [
-                    'x-api-key' => 'VDiLWH4R...', // Masked
-                    'Accept' => 'application/pdf'
-                ],
-                'query_params' => $queryParams
-            ]);
-
-            // ✅ CORRECT: POST with query parameters in URL (exactly like your Postman)
-            $response = Http::withHeaders([
-                'x-api-key' => $this->apiKey,
-                'Accept' => 'application/pdf'
+            // Use asForm() for form data instead of JSON
+            $response = Http::asForm()->withHeaders([
+                'x-api-key' => $this->apiKey
             ])
             ->timeout($this->timeout)
-            ->post($url); // No body, just query params in URL
+            ->post($this->baseUrl . '/order/api/v1/orders/print-label?order_no=' . $orderNo, [
+                'page' => $pageSize
+            ]);
 
             $executionTime = round((microtime(true) - $startTime) * 1000, 2);
 
-            Log::info('📡 Komerce Print Label Full Response', [
+            Log::info('📡 Komerce Print Label Response', [
                 'status_code' => $response->status(),
                 'successful' => $response->successful(),
                 'content_type' => $response->header('content-type'),
                 'response_size' => strlen($response->body()),
-                'response_headers' => $response->headers(),
-                'raw_response' => substr($response->body(), 0, 500), // First 500 chars
-                'execution_time_ms' => $executionTime
+                'execution_time_ms' => $executionTime,
+                'request_data' => [
+                    'order_no' => $orderNo,
+                    'page' => $pageSize,
+                    'request_type' => 'form_data'
+                ]
             ]);
 
             if (!$response->successful()) {
-                Log::error('❌ Komerce Label Generation Failed', [
+                Log::error('❌ Komerce Print Label Failed', [
                     'status_code' => $response->status(),
                     'error_response' => $response->body(),
                     'order_no' => $orderNo,
-                    'url' => $url
+                    'request_data' => [
+                        'page' => $pageSize,
+                        'order_no' => $orderNo
+                    ]
                 ]);
 
                 return [
@@ -98,63 +87,63 @@ class KomerceOrderService
                 ];
             }
 
-            // ✅ Check response content type
-            $contentType = $response->header('content-type');
             $responseBody = $response->body();
+            $contentType = $response->header('content-type');
 
-            Log::info('📊 Komerce Response Analysis', [
-                'content_type' => $contentType,
-                'body_length' => strlen($responseBody),
-                'is_pdf' => strpos($contentType, 'application/pdf') !== false,
-                'is_json' => strpos($contentType, 'application/json') !== false,
-                'body_preview' => substr($responseBody, 0, 100)
-            ]);
-
-            // Handle PDF response
-            if (strpos($contentType, 'application/pdf') !== false) {
-                Log::info('✅ Komerce Label Generated Successfully (PDF)', [
-                    'order_no' => $orderNo,
-                    'pdf_size' => strlen($responseBody),
-                    'execution_time_ms' => $executionTime
-                ]);
-
-                return [
-                    'success' => true,
-                    'data' => [
-                        'pdf_content' => base64_encode($responseBody),
-                        'content_type' => $contentType,
-                        'filename' => 'label_' . $orderNo . '.pdf',
-                        'order_no' => $orderNo,
-                        'generated_at' => now()->toISOString()
-                    ],
-                    'execution_time_ms' => $executionTime
-                ];
-            }
-
-            // Handle JSON response (might contain URL or error)
-            if (strpos($contentType, 'application/json') !== false || $this->isJsonString($responseBody)) {
+            // Check if response is JSON
+            if (strpos($contentType, 'application/json') !== false) {
                 try {
                     $data = $response->json();
                     
-                    Log::info('📊 Komerce JSON Response Analysis', [
-                        'response_structure' => $data,
-                        'has_meta' => isset($data['meta']),
+                    // 📋 DETAILED LOGGING LIKE TRACKING
+                    Log::info('📋 Komerce Label Response Data', [
+                        'full_response' => $data,
                         'has_data' => isset($data['data']),
-                        'meta_content' => $data['meta'] ?? null,
-                        'data_content' => $data['data'] ?? null
+                        'has_meta' => isset($data['meta']),
+                        'meta_status' => $data['meta']['status'] ?? 'unknown',
+                        'meta_message' => $data['meta']['message'] ?? 'no message',
+                        'data_keys' => isset($data['data']) ? array_keys($data['data']) : [],
+                        'order_no' => $orderNo
                     ]);
 
                     // Check if it's success response with label info
                     if (isset($data['meta']['status']) && $data['meta']['status'] === 'success') {
+                        $labelData = $data['data'] ?? [];
+                        
+                        // Extract available fields for analysis
+                        $availableFields = array_keys($labelData);
+                        
+                        Log::info('✅ Komerce Label Generation Success', [
+                            'order_no' => $orderNo,
+                            'available_fields' => $availableFields,
+                            'has_download_url' => isset($labelData['download_url']),
+                            'has_base_64' => isset($labelData['base_64']),
+                            'has_label_url' => isset($labelData['label_url']),
+                            'has_path' => isset($labelData['path']),
+                            'has_filename' => isset($labelData['filename']),
+                            'download_url' => $labelData['download_url'] ?? null,
+                            'path' => $labelData['path'] ?? null,
+                            'filename' => $labelData['filename'] ?? null,
+                            'execution_time_ms' => $executionTime
+                        ]);
+
                         return [
                             'success' => true,
-                            'data' => array_merge($data['data'] ?? [], [
+                            'data' => array_merge($labelData, [
                                 'order_no' => $orderNo,
                                 'generated_at' => now()->toISOString()
                             ]),
                             'execution_time_ms' => $executionTime
                         ];
                     } else {
+                        Log::error('❌ Komerce Label Generation Failed', [
+                            'order_no' => $orderNo,
+                            'meta_status' => $data['meta']['status'] ?? 'unknown',
+                            'meta_message' => $data['meta']['message'] ?? 'Unknown error',
+                            'full_response' => $data,
+                            'execution_time_ms' => $executionTime
+                        ]);
+
                         return [
                             'success' => false,
                             'error' => 'LABEL_GENERATION_FAILED',
@@ -165,15 +154,28 @@ class KomerceOrderService
                 } catch (\Exception $jsonError) {
                     Log::error('❌ Failed to parse JSON response', [
                         'json_error' => $jsonError->getMessage(),
-                        'raw_response' => $responseBody
+                        'raw_response' => substr($responseBody, 0, 500), // First 500 chars for preview
+                        'content_type' => $contentType,
+                        'order_no' => $orderNo
                     ]);
                 }
+            } else {
+                // Non-JSON response (could be PDF binary)
+                Log::info('📄 Komerce Non-JSON Response', [
+                    'content_type' => $contentType,
+                    'response_size' => strlen($responseBody),
+                    'is_pdf' => strpos($contentType, 'application/pdf') !== false,
+                    'response_preview' => substr($responseBody, 0, 100), // First 100 bytes
+                    'order_no' => $orderNo
+                ]);
             }
 
             // Fallback: assume success but unknown format
             Log::warning('⚠️ Unknown response format, treating as success', [
                 'content_type' => $contentType,
-                'response_preview' => substr($responseBody, 0, 200)
+                'response_size' => strlen($responseBody),
+                'response_preview' => substr($responseBody, 0, 200),
+                'order_no' => $orderNo
             ]);
 
             return [
@@ -183,7 +185,7 @@ class KomerceOrderService
                     'content_type' => $contentType,
                     'order_no' => $orderNo,
                     'generated_at' => now()->toISOString(),
-                    'note' => 'Unknown response format - check Komerce dashboard'
+                    'note' => 'Unknown response format - check raw_response'
                 ],
                 'execution_time_ms' => $executionTime
             ];
@@ -429,7 +431,20 @@ class KomerceOrderService
 
             $executionTime = round((microtime(true) - $startTime) * 1000, 2);
 
+            Log::info('📡 Komerce Track Shipment Response', [
+                'status_code' => $response->status(),
+                'successful' => $response->successful(),
+                'execution_time_ms' => $executionTime
+            ]);
+
             if (!$response->successful()) {
+                Log::error('❌ Komerce Shipment Tracking Failed', [
+                    'status_code' => $response->status(),
+                    'error_response' => $response->body(),
+                    'airway_bill' => $airwayBill,
+                    'shipping' => $shipping
+                ]);
+
                 return [
                     'success' => false,
                     'error' => 'TRACKING_FAILED',
@@ -439,13 +454,68 @@ class KomerceOrderService
 
             $data = $response->json();
             
-            return [
-                'success' => true,
-                'data' => $data,
-                'execution_time_ms' => $executionTime
-            ];
+            // Log full response for debugging
+            Log::info('📋 Komerce Track Response Data', [
+                'full_response' => $data,
+                'has_data' => isset($data['data']),
+                'has_meta' => isset($data['meta'])
+            ]);
+
+            // Check if successful response
+            if (isset($data['meta']['status']) && $data['meta']['status'] === 'success') {
+                $trackingData = $data['data'] ?? [];
+                
+                // Extract tracking information
+                $currentStatus = $trackingData['last_status'] ?? 'Unknown';
+                $history = $trackingData['history'] ?? [];
+                $airwayBillFromResponse = $trackingData['airway_bill'] ?? $airwayBill;
+                
+                Log::info('✅ Komerce Shipment Tracking Retrieved', [
+                    'airway_bill' => $airwayBillFromResponse,
+                    'tracking_count' => count($history),
+                    'current_status' => $currentStatus,
+                    'execution_time_ms' => $executionTime
+                ]);
+
+                return [
+                    'success' => true,
+                    'data' => [
+                        'status' => $currentStatus,
+                        'last_status' => $currentStatus,
+                        'airway_bill' => $airwayBillFromResponse,
+                        'history' => array_map(function($item) {
+                            return [
+                                'description' => $item['desc'] ?? '',
+                                'date' => $item['date'] ?? '',
+                                'status' => $item['status'] ?? '',
+                                'code' => $item['code'] ?? ''
+                            ];
+                        }, $history)
+                    ],
+                    'execution_time_ms' => $executionTime
+                ];
+            } else {
+                Log::warning('⚠️ Komerce tracking response not successful', [
+                    'meta' => $data['meta'] ?? null,
+                    'airway_bill' => $airwayBill
+                ]);
+
+                return [
+                    'success' => false,
+                    'error' => 'TRACKING_RESPONSE_ERROR',
+                    'message' => $data['meta']['message'] ?? 'Unknown tracking error',
+                    'data' => $data
+                ];
+            }
 
         } catch (\Exception $e) {
+            Log::error('❌ Komerce Shipment Tracking Error', [
+                'error' => $e->getMessage(),
+                'airway_bill' => $airwayBill,
+                'shipping' => $shipping,
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return [
                 'success' => false,
                 'error' => 'TRACKING_ERROR',
