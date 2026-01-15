@@ -14,7 +14,7 @@ class KomerceShippingService
     public function __construct()
     {
         $this->apiKey = env('KOMERCE_API_KEY', 'VDiLWH4R48172606d28bde1a3dHKapOZ');
-        $this->baseUrl = env('KOMERCE_BASE_URL', 'https://api-sandbox.collaborator.komerce.id');
+        $this->baseUrl = env('KOMERCE_BASE_URL', 'https://api.collaborator.komerce.id');
         $this->timeout = env('KOMERCE_TIMEOUT', 25);
         
         Log::info('Komerce Shipping Service initialized', [
@@ -325,7 +325,7 @@ class KomerceShippingService
     /**
      * Test API connection
      */
-    public function testConnection($originId = 17485, $destinationId = 17551, $weight = 2500)
+    public function testConnection($originId = 17551, $destinationId = 17551, $weight = 2500)
     {
         Log::info('🧪 Testing Komerce API connection');
         

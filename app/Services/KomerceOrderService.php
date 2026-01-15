@@ -16,9 +16,9 @@ class KomerceOrderService
     public function __construct()
     {
         $this->apiKey = env('KOMERCE_API_KEY', 'VDiLWH4R48172606d28bde1a3dHKapOZ');
-        $this->baseUrl = env('KOMERCE_BASE_URL', 'https://api-sandbox.collaborator.komerce.id');
+        $this->baseUrl = env('KOMERCE_BASE_URL', 'https://api.collaborator.komerce.id');
         $this->timeout = env('KOMERCE_TIMEOUT', 30);
-        $this->shipperDestinationId = env('KOMERCE_SHIPPER_DESTINATION_ID', '17485');
+        $this->shipperDestinationId = env('KOMERCE_SHIPPER_DESTINATION_ID', '17551');
         
         Log::info('Komerce Order Service initialized', [
             'base_url' => $this->baseUrl,
