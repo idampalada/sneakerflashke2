@@ -185,18 +185,26 @@ class ViewKomerceOrder extends ViewRecord
                     $this->generateLabel();
                 }),
 
-            // Track Shipment Action
-            Actions\Action::make('track_shipment')
-                ->label('Track Shipment')
-                ->icon('heroicon-o-magnifying-glass')
-                ->color('primary')
-                ->visible(function (): bool {
-                    $record = $this->getRecord();
-                    return !empty($record->tracking_number);
-                })
-                ->action(function () {
-                    $this->trackShipment();
-                }),
+// Track Shipment Action (MODAL)
+Actions\Action::make('track_shipment')
+    ->label('Track Shipment')
+    ->icon('heroicon-o-truck')
+    ->color('primary')
+    ->modalHeading('📦 Live Shipment Tracking')
+    ->modalWidth('2xl')
+    ->modalContent(fn () => view(
+        'filament.admin.orders.track-shipment',
+        [
+            'order' => $this->getRecord(),
+        ]
+    ))
+    ->modalSubmitAction(false) // ⛔ tidak submit
+    ->modalCancelActionLabel('Close')
+    ->visible(function (): bool {
+        $record = $this->getRecord();
+        return !empty($record->tracking_number) || !empty($record->komerce_awb);
+    }),
+
 
             // Download Label Action
             Actions\Action::make('download_label')
@@ -453,82 +461,7 @@ class ViewKomerceOrder extends ViewRecord
     /**
      * Track shipment status
      */
-    protected function trackShipment(): void
-    {
-        try {
-            $record = $this->getRecord();
-            
-            // Get AWB from multiple sources with priority
-            $awbNumber = null;
-            
-            // Priority 1: Database column komerce_awb
-            if (!empty($record->komerce_awb)) {
-                $awbNumber = $record->komerce_awb;
-                \Log::info('✅ Using AWB from komerce_awb column', ['awb' => $awbNumber]);
-            }
-            // Priority 2: Meta data pickup AWB
-            else {
-                $meta = json_decode($record->meta_data ?? '{}', true) ?? [];
-                
-                if (isset($meta['komerce_pickup']['awb']) && !empty($meta['komerce_pickup']['awb'])) {
-                    $awbNumber = $meta['komerce_pickup']['awb'];
-                    \Log::info('✅ Using AWB from pickup meta data', ['awb' => $awbNumber]);
-                }
-                // Priority 3: Meta data root AWB
-                elseif (isset($meta['awb']) && !empty($meta['awb'])) {
-                    $awbNumber = $meta['awb'];
-                    \Log::info('✅ Using AWB from root meta data', ['awb' => $awbNumber]);
-                }
-                // Priority 4: Fallback to tracking_number if no AWB found
-                elseif (!empty($record->tracking_number)) {
-                    $awbNumber = $record->tracking_number;
-                    \Log::info('⚠️ Using tracking_number as fallback AWB', ['awb' => $awbNumber]);
-                }
-            }
-            
-            if (!$awbNumber) {
-                throw new \Exception('No AWB or tracking number available for shipment tracking');
-            }
 
-            \Log::info('🔍 Starting shipment tracking', ['awb' => $awbNumber]);
-
-            $komerceService = app(KomerceOrderService::class);
-            $result = $komerceService->trackShipment($awbNumber, 'JNE');
-
-            if ($result['success']) {
-                $status = $result['data']['status'] ?? 'Unknown';
-                $history = $result['data']['history'] ?? [];
-                
-                $bodyText = "Current Status: {$status}";
-                if (!empty($history)) {
-                    $bodyText .= "\n\nRecent Updates:";
-                    foreach (array_slice($history, 0, 3) as $track) {
-                        $bodyText .= "\n• {$track['description']} ({$track['date']})";
-                    }
-                }
-                
-                Notification::make()
-                    ->title("Tracking AWB: {$awbNumber}")
-                    ->body($bodyText)
-                    ->info()
-                    ->duration(10000)
-                    ->send();
-            } else {
-                throw new \Exception($result['message'] ?? 'Failed to track shipment');
-            }
-        } catch (\Exception $e) {
-            \Log::error('Track Shipment Error', [
-                'order_id' => $this->getRecord()->id,
-                'error' => $e->getMessage()
-            ]);
-
-            Notification::make()
-                ->title('Error Tracking Shipment')
-                ->body($e->getMessage())
-                ->danger()
-                ->send();
-        }
-    }
 
     /**
      * Get Komerce Order ID helper

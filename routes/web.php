@@ -373,6 +373,46 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 });
 
+// =====================================
+// ADMIN TRACKING ROUTES (FOR FILAMENT)
+// =====================================
+Route::middleware(['auth'])->group(function () {
+
+    Route::get('/admin/orders/{order:order_number}/track', function (\App\Models\Order $order) {
+
+        $service = app(\App\Services\KomerceOrderService::class);
+
+        $meta = json_decode($order->meta_data ?? '{}', true) ?? [];
+
+        $awb =
+            $order->komerce_awb
+            ?? data_get($meta, 'komerce_pickup.awb')
+            ?? data_get($meta, 'awb')
+            ?? $order->tracking_number;
+
+        if (!$awb) {
+            return response()->json([
+                'success' => false,
+                'message' => 'AWB not available',
+            ]);
+        }
+
+        $result = $service->trackShipment($awb, 'JNE');
+
+        return response()->json([
+            'success' => true,
+            'order' => [
+                'order_number' => $order->order_number,
+                'customer' => $order->customer_name,
+                'awb' => $awb,
+            ],
+            'tracking' => $result['data'] ?? [],
+        ]);
+    })->name('admin.orders.track');
+
+});
+
+
 
 // =====================================
 // API ROUTES - CONSOLIDATED
