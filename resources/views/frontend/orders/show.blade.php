@@ -1,4 +1,4 @@
-{{-- File: resources/views/frontend/orders/show.blade.php - NO TAX VERSION --}}
+{{-- File: resources/views/frontend/orders/show.blade.php - CLEAN AUTO-SYNC VERSION --}}
 @extends('layouts.app')
 
 @section('title', 'Order #' . $order->order_number . ' - SneakerFlash')
@@ -35,39 +35,33 @@
                     </h2>
                     
                     <div class="flex flex-wrap gap-2 mb-3">
-                        <!-- UPDATED: Single Status Badge -->
-                        @if($order->status === 'pending')
-                            <span class="px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                        <!-- UPDATED: Single Status Badge (auto-updated) -->
+                        <span id="current-order-status" class="px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">
+                            @if($order->status === 'pending')
                                 ⏳ Pending
-                            </span>
-                        @elseif($order->status === 'paid')
-                            <span class="px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">
+                            @elseif($order->status === 'paid')
                                 ✅ Paid
-                            </span>
-                        @elseif($order->status === 'processing')
-                            <span class="px-3 py-1 text-sm font-semibold rounded-full bg-blue-100 text-blue-800">
+                            @elseif($order->status === 'processing')
                                 🔄 Processing
-                            </span>
-                        @elseif($order->status === 'shipped')
-                            <span class="px-3 py-1 text-sm font-semibold rounded-full bg-purple-100 text-purple-800">
+                            @elseif($order->status === 'shipped')
                                 🚚 Shipped
-                            </span>
-                        @elseif($order->status === 'delivered')
-                            <span class="px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">
+                            @elseif($order->status === 'delivered')
                                 📦 Delivered
-                            </span>
-                        @elseif($order->status === 'cancelled')
-                            <span class="px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800">
+                            @elseif($order->status === 'cancelled')
                                 ❌ Cancelled
-                            </span>
-                        @elseif($order->status === 'refund')
-                            <span class="px-3 py-1 text-sm font-semibold rounded-full bg-gray-100 text-gray-800">
+                            @elseif($order->status === 'refund')
                                 💰 Refunded
-                            </span>
-                        @else
-                            <span class="px-3 py-1 text-sm font-semibold rounded-full bg-gray-100 text-gray-800">
+                            @else
                                 {{ ucfirst($order->status) }}
-                            </span>
+                            @endif
+                        </span>
+
+                        <!-- Live Tracking Button (Only visible button) -->
+                        @if(in_array($order->status, ['paid', 'processing', 'shipped', 'delivered']))
+                            <button onclick="openTrackingModal('{{ $order->order_number }}')"
+                                    class="px-3 py-1 text-sm font-semibold rounded-full bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors cursor-pointer">
+                                📍 Track Package
+                            </button>
                         @endif
                     </div>
                     
@@ -77,8 +71,7 @@
                         @if($order->tracking_number)
                             <p><strong>Tracking Number:</strong> {{ $order->tracking_number }}</p>
                         @endif
-                        <!-- UPDATED: Status Description -->
-                        <p><strong>Status:</strong> {{ $order->getPaymentStatusText() }}</p>
+                        <p><strong>Status:</strong> <span id="status-description">{{ $order->getPaymentStatusText() }}</span></p>
                     </div>
                 </div>
                 
@@ -116,11 +109,11 @@
             </div>
         @endif
 
-        <!-- Order Progress Timeline -->
+        <!-- UPDATED: Clean Order Progress Timeline (auto-updated in background) -->
         <div class="bg-white rounded-lg shadow-md p-6 mb-6">
             <h3 class="text-lg font-semibold text-gray-900 mb-4">Order Progress</h3>
             
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between" id="order-progress-timeline">
                 @php
                     $statusOrder = ['pending', 'paid', 'processing', 'shipped', 'delivered'];
                     $currentIndex = array_search($order->status, $statusOrder);
@@ -149,7 +142,7 @@
                         </div>
                     </div>
                 @else
-                    <!-- Normal Progress -->
+                    <!-- Normal Progress (auto-updated) -->
                     @foreach(['pending' => '⏳', 'paid' => '✅', 'processing' => '🔄', 'shipped' => '🚚', 'delivered' => '📦'] as $status => $icon)
                         @php
                             $statusIndex = array_search($status, $statusOrder);
@@ -157,18 +150,18 @@
                             $isCurrent = $order->status === $status;
                         @endphp
                         
-                        <div class="flex items-center {{ !$loop->last ? 'flex-1' : '' }}">
+                        <div class="flex items-center {{ !$loop->last ? 'flex-1' : '' }}" data-status="{{ $status }}">
                             <div class="flex items-center">
-                                <div class="flex items-center justify-center w-8 h-8 rounded-full {{ $isCompleted ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400' }}">
+                                <div class="flex items-center justify-center w-8 h-8 rounded-full {{ $isCompleted ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400' }}" data-status-icon="{{ $status }}">
                                     <span class="text-sm">{{ $icon }}</span>
                                 </div>
-                                <span class="ml-2 text-sm font-medium {{ $isCompleted ? 'text-green-600' : 'text-gray-400' }}">
+                                <span class="ml-2 text-sm font-medium {{ $isCompleted ? 'text-green-600' : 'text-gray-400' }}" data-status-label="{{ $status }}">
                                     {{ ucfirst($status) }}
                                 </span>
                             </div>
                             
                             @if(!$loop->last)
-                                <div class="flex-1 h-0.5 ml-4 {{ $isCompleted && !$isCurrent ? 'bg-green-300' : 'bg-gray-200' }}"></div>
+                                <div class="flex-1 h-0.5 ml-4 {{ $isCompleted && !$isCurrent ? 'bg-green-300' : 'bg-gray-200' }}" data-status-line="{{ $status }}"></div>
                             @endif
                         </div>
                     @endforeach
@@ -256,8 +249,6 @@
                     </div>
                 @endif
                 
-                <!-- REMOVED TAX DISPLAY -->
-                
                 @if($order->discount_amount > 0)
                     <div class="flex justify-between text-green-600">
                         <span>Discount</span>
@@ -281,15 +272,15 @@
                 ← Back to Orders
             </a>
             
-            <!-- UPDATED: Show invoice for paid orders and beyond
+            <!-- Live Tracking Button (Only main action button) -->
             @if(in_array($order->status, ['paid', 'processing', 'shipped', 'delivered']))
-                <a href="{{ route('orders.invoice', $order->order_number) }}" 
-                   class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                    📄 Download Invoice
-                </a>
-            @endif -->
+                <button onclick="openTrackingModal('{{ $order->order_number }}')" 
+                        class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                     Live Track Package
+                </button>
+            @endif
             
-            <!-- UPDATED: Cancel button only for pending orders -->
+            <!-- Cancel button only for pending orders -->
             @if($order->status === 'pending')
                 <form action="{{ route('orders.cancel', $order->order_number) }}" method="POST" class="inline">
                     @csrf
@@ -304,6 +295,95 @@
     </div>
 </div>
 
+<!-- Live Tracking Modal Popup -->
+<div id="tracking-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between p-6 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900">📦 Live Package Tracking</h3>
+            <button onclick="closeTrackingModal()" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <!-- Modal Content -->
+        <div class="p-6 max-h-[70vh] overflow-y-auto">
+            <!-- Loading State -->
+            <div id="tracking-loading" class="text-center py-8">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p class="text-gray-600">Loading tracking information...</p>
+            </div>
+            
+            <!-- Tracking Content -->
+            <div id="tracking-content" class="hidden">
+                <!-- Order Info -->
+                <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <p class="text-gray-600">Order Number</p>
+                            <p class="font-semibold text-gray-900" id="modal-order-number">-</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-600">Customer</p>
+                            <p class="font-semibold text-gray-900" id="modal-customer-name">-</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-600">AWB Number</p>
+                            <p class="font-mono text-sm text-gray-900" id="modal-awb-number">-</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-600">Last Updated</p>
+                            <p class="text-gray-900" id="modal-last-updated">-</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Current Status -->
+                <div class="text-center mb-6">
+                    <div class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-green-100 text-green-800" id="modal-current-status-badge">
+                        <span class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
+                        <span id="modal-current-status">Loading...</span>
+                    </div>
+                </div>
+                
+                <!-- Tracking History -->
+                <div id="modal-tracking-history">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+            
+            <!-- Error State -->
+            <div id="tracking-error" class="hidden text-center py-8">
+                <div class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                </div>
+                <h4 class="text-lg font-semibold text-gray-900 mb-2">Tracking Information</h4>
+                <p class="text-gray-600 mb-4" id="tracking-error-message">Unable to load tracking data</p>
+            </div>
+        </div>
+        
+        <!-- Modal Footer -->
+        <div class="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+            <button onclick="refreshTracking()" 
+                    id="modal-refresh-btn"
+                    class="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors flex items-center space-x-2">
+                <svg id="modal-refresh-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                <span>Refresh</span>
+            </button>
+            <button onclick="closeTrackingModal()" 
+                    class="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Loading Overlay -->
 <div id="payment-loading" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
     <div class="bg-white rounded-lg p-6 text-center">
@@ -313,7 +393,318 @@
 </div>
 
 <script>
-// UPDATED: Retry Payment Function for single status
+// Global variables
+let currentOrderNumber = '{{ $order->order_number }}';
+let isRefreshing = false;
+let autoUpdateInterval = null;
+let lastTrackingData = null;
+
+// Initialize page - SILENT AUTO-SYNC
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-load tracking data when page loads (for eligible orders)
+    @if(in_array($order->status, ['paid', 'processing', 'shipped', 'delivered']))
+        loadBackgroundTrackingData();
+        
+        // Start auto-update every 5 minutes (SILENT)
+        autoUpdateInterval = setInterval(loadBackgroundTrackingData, 5 * 60 * 1000);
+    @endif
+});
+
+// SILENT: Load tracking data in background
+async function loadBackgroundTrackingData() {
+    try {
+        const response = await fetch(`/orders/${currentOrderNumber}/track`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            lastTrackingData = data.data;
+            silentUpdatePageProgress(data.data);
+        }
+        
+    } catch (error) {
+        // Silent fail - don't show errors to user
+        console.log('Background sync:', error.message || 'Silent update');
+    }
+}
+
+// SILENT: Update page elements without UI noise
+function silentUpdatePageProgress(data) {
+    // Determine progress based on tracking status
+    if (data.tracking.current_status) {
+        updateOrderProgressFromTracking(data.tracking.current_status);
+        updateStatusBadge(data.tracking.current_status);
+    }
+}
+
+// Update status badge based on tracking
+function updateStatusBadge(trackingStatus) {
+    const badge = document.getElementById('current-order-status');
+    if (!badge) return;
+    
+    // Mapping tracking status to badge display
+    const statusMappings = {
+        'Pickup': { text: '🔄 Processing', class: 'bg-blue-100 text-blue-800' },
+        'Dalam Perjalanan': { text: '🚚 Shipped', class: 'bg-purple-100 text-purple-800' }, 
+        'Dalam perjalanan': { text: '🚚 Shipped', class: 'bg-purple-100 text-purple-800' },
+        'On Transit': { text: '🚚 Shipped', class: 'bg-purple-100 text-purple-800' },
+        'Tiba di Kota Tujuan': { text: '🚚 Shipped', class: 'bg-purple-100 text-purple-800' },
+        'Delivered': { text: '📦 Delivered', class: 'bg-green-100 text-green-800' },
+        'Terkirim': { text: '📦 Delivered', class: 'bg-green-100 text-green-800' }
+    };
+    
+    // Find appropriate status mapping
+    for (const [trackingKey, statusInfo] of Object.entries(statusMappings)) {
+        if (trackingStatus.toLowerCase().includes(trackingKey.toLowerCase())) {
+            badge.textContent = statusInfo.text;
+            badge.className = `px-3 py-1 text-sm font-semibold rounded-full ${statusInfo.class}`;
+            break;
+        }
+    }
+}
+
+// Update Order Progress timeline based on tracking status
+function updateOrderProgressFromTracking(trackingStatus) {
+    if (!trackingStatus) return;
+    
+    // Mapping tracking status to order progress
+    const statusMappings = {
+        'Pickup': 'processing',
+        'Dalam Perjalanan': 'shipped', 
+        'Dalam perjalanan': 'shipped',
+        'On Transit': 'shipped',
+        'Tiba di Kota Tujuan': 'shipped',
+        'Delivered': 'delivered',
+        'Terkirim': 'delivered',
+        'Gagal Kirim': 'shipped',
+        'Return': 'shipped'
+    };
+    
+    // Find appropriate order status based on tracking
+    let targetStatus = null;
+    for (const [trackingKey, orderStatus] of Object.entries(statusMappings)) {
+        if (trackingStatus.toLowerCase().includes(trackingKey.toLowerCase())) {
+            targetStatus = orderStatus;
+            break;
+        }
+    }
+    
+    // Intelligent fallback
+    if (!targetStatus) {
+        if (trackingStatus.toLowerCase().includes('pickup') || 
+            trackingStatus.toLowerCase().includes('diambil')) {
+            targetStatus = 'processing';
+        } else if (trackingStatus.toLowerCase().includes('perjalanan') || 
+                   trackingStatus.toLowerCase().includes('transit')) {
+            targetStatus = 'shipped';
+        } else if (trackingStatus.toLowerCase().includes('tiba') || 
+                   trackingStatus.toLowerCase().includes('sampai')) {
+            targetStatus = 'delivered';
+        }
+    }
+    
+    if (targetStatus) {
+        updateProgressTimeline(targetStatus);
+    }
+}
+
+// Update progress timeline UI
+function updateProgressTimeline(newStatus) {
+    const statusOrder = ['pending', 'paid', 'processing', 'shipped', 'delivered'];
+    const newIndex = statusOrder.indexOf(newStatus);
+    
+    if (newIndex === -1) return;
+    
+    // Update each status in timeline
+    statusOrder.forEach((status, index) => {
+        const isCompleted = index <= newIndex;
+        const statusIcon = document.querySelector(`[data-status-icon="${status}"]`);
+        const statusLabel = document.querySelector(`[data-status-label="${status}"]`);
+        const statusLine = document.querySelector(`[data-status-line="${status}"]`);
+        
+        if (statusIcon) {
+            statusIcon.className = isCompleted 
+                ? 'flex items-center justify-center w-8 h-8 rounded-full bg-green-100 text-green-600'
+                : 'flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-400';
+        }
+        
+        if (statusLabel) {
+            statusLabel.className = isCompleted
+                ? 'ml-2 text-sm font-medium text-green-600'
+                : 'ml-2 text-sm font-medium text-gray-400';
+        }
+        
+        if (statusLine) {
+            statusLine.className = isCompleted && index < newIndex
+                ? 'flex-1 h-0.5 ml-4 bg-green-300'
+                : 'flex-1 h-0.5 ml-4 bg-gray-200';
+        }
+    });
+}
+
+// Modal Functions
+function openTrackingModal(orderNumber) {
+    currentOrderNumber = orderNumber;
+    document.getElementById('tracking-modal').classList.remove('hidden');
+    loadTrackingData();
+}
+
+function closeTrackingModal() {
+    document.getElementById('tracking-modal').classList.add('hidden');
+    resetModalStates();
+}
+
+function resetModalStates() {
+    document.getElementById('tracking-loading').classList.remove('hidden');
+    document.getElementById('tracking-content').classList.add('hidden');
+    document.getElementById('tracking-error').classList.add('hidden');
+}
+
+async function loadTrackingData() {
+    if (!currentOrderNumber) return;
+    
+    try {
+        resetModalStates();
+        
+        // Use cached data if available
+        if (lastTrackingData) {
+            displayTrackingData(lastTrackingData);
+            return;
+        }
+        
+        const response = await fetch(`/orders/${currentOrderNumber}/track`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            lastTrackingData = data.data;
+            displayTrackingData(data.data);
+        } else {
+            displayTrackingError(data.error || 'Failed to load tracking information');
+        }
+        
+    } catch (error) {
+        console.error('Tracking load error:', error);
+        displayTrackingError('Network error occurred. Please try again.');
+    }
+}
+
+function displayTrackingData(data) {
+    // Hide loading, show content
+    document.getElementById('tracking-loading').classList.add('hidden');
+    document.getElementById('tracking-error').classList.add('hidden');
+    document.getElementById('tracking-content').classList.remove('hidden');
+    
+    // Populate order info
+    document.getElementById('modal-order-number').textContent = data.order_info.order_number;
+    document.getElementById('modal-customer-name').textContent = data.order_info.customer_name;
+    document.getElementById('modal-awb-number').textContent = data.order_info.awb_number || 'Not available';
+    document.getElementById('modal-last-updated').textContent = data.tracking.updated_at;
+    
+    // Update current status
+    document.getElementById('modal-current-status').textContent = data.tracking.current_status;
+    
+    // Update tracking history
+    const historyContainer = document.getElementById('modal-tracking-history');
+    if (data.tracking.history && data.tracking.history.length > 0) {
+        let historyHtml = '<h4 class="font-semibold text-gray-900 mb-4">📋 Package Journey</h4>';
+        historyHtml += '<div class="space-y-4">';
+        
+        data.tracking.history.forEach((track, index) => {
+            const isLatest = index === 0;
+            historyHtml += `
+                <div class="flex items-start space-x-4 p-3 rounded-lg ${isLatest ? 'bg-green-50 border border-green-200' : 'bg-gray-50'}">
+                    <div class="flex-shrink-0 mt-1">
+                        <div class="w-3 h-3 ${isLatest ? 'bg-green-500' : 'bg-gray-300'} rounded-full"></div>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-gray-900">
+                            ${track.description || track.status || 'Status Update'}
+                        </p>
+                        <div class="text-xs text-gray-500 mt-1">
+                            📅 ${track.date || 'Date not available'}
+                            ${track.code ? `<span class="ml-2 font-mono bg-gray-200 px-2 py-1 rounded">${track.code}</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        historyHtml += '</div>';
+        historyContainer.innerHTML = historyHtml;
+    } else {
+        historyContainer.innerHTML = `
+            <div class="text-center py-6 text-gray-500">
+                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                </div>
+                <p class="text-sm">No tracking history available yet.</p>
+            </div>
+        `;
+    }
+}
+
+function displayTrackingError(errorMessage) {
+    // Hide loading and content, show error
+    document.getElementById('tracking-loading').classList.add('hidden');
+    document.getElementById('tracking-content').classList.add('hidden');
+    document.getElementById('tracking-error').classList.remove('hidden');
+    
+    document.getElementById('tracking-error-message').textContent = errorMessage;
+}
+
+function refreshTracking() {
+    if (isRefreshing || !currentOrderNumber) return;
+    
+    isRefreshing = true;
+    const refreshBtn = document.getElementById('modal-refresh-btn');
+    const refreshIcon = document.getElementById('modal-refresh-icon');
+    
+    // Show loading state on button
+    refreshBtn.disabled = true;
+    refreshBtn.classList.add('opacity-50');
+    refreshIcon.classList.add('animate-spin');
+    
+    // Clear cached data to force fresh fetch
+    lastTrackingData = null;
+    
+    loadTrackingData().finally(() => {
+        isRefreshing = false;
+        refreshBtn.disabled = false;
+        refreshBtn.classList.remove('opacity-50');
+        refreshIcon.classList.remove('animate-spin');
+    });
+}
+
+// Close modal when clicking outside
+document.getElementById('tracking-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeTrackingModal();
+    }
+});
+
+// Cleanup intervals on page unload
+window.addEventListener('beforeunload', function() {
+    if (autoUpdateInterval) {
+        clearInterval(autoUpdateInterval);
+    }
+});
+
+// Payment Functions
 async function retryPayment(orderNumber, snapToken) {
     console.log('🔄 Retrying payment for order:', orderNumber);
     

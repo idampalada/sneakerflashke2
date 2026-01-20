@@ -12,6 +12,7 @@ use App\Http\Controllers\Frontend\AddressController;
 use App\Http\Controllers\Frontend\GineeSyncController;
 use App\Http\Controllers\Frontend\GineeWebhookController;
 use App\Http\Controllers\Frontend\BlackFridayController;
+use App\Http\Controllers\Frontend\OrderTrackingController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
@@ -24,6 +25,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Auth\VerificationController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use Illuminate\Support\Facades\Storage;
+
 /*
 |--------------------------------------------------------------------------
 | Web Routes - CLEANED & FIXED
@@ -582,6 +584,12 @@ Route::get('/auth/apple', function() {
 Route::get('/auth/apple/callback', function() {
     return redirect()->route('login')->with('info', 'Apple authentication callback');
 })->name('auth.apple.callback');
+
+
+// Order Tracking Route for Popup
+Route::get('/orders/{orderNumber}/track', [OrderTrackingController::class, 'trackOrder'])
+    ->name('orders.track.popup')
+    ->middleware('web');
 
 // =====================================
 // DEBUG ROUTES (Only in local/staging)
