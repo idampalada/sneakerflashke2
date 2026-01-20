@@ -155,7 +155,7 @@ class ViewKomerceOrder extends ViewRecord
                             '09:00' => '09:00 - Morning',
                             '11:00' => '11:00 - Late Morning',
                             '14:00' => '14:00 - Afternoon',
-                            '16:00' => '16:00 - Late Afternoon',
+                            '17:00' => '17:00 - Late Afternoon',
                         ])
                         ->default('14:00')
                         ->required(),
@@ -285,7 +285,7 @@ class ViewKomerceOrder extends ViewRecord
                     ->send();
 
                 // Refresh current page properly
-                $this->redirect(static::getUrl('view', ['record' => $record->id]));
+                $this->redirect($this->getUrl());
             } else {
                 throw new \Exception($result['message'] ?? 'Failed to request pickup');
             }
@@ -430,7 +430,7 @@ class ViewKomerceOrder extends ViewRecord
                     ->send();
 
                 // Refresh current page properly
-                $this->redirect(static::getUrl('view', ['record' => $record->id]));
+                $this->redirect($this->getUrl());
             } else {
                 throw new \Exception($result['message'] ?? 'Failed to generate label');
             }

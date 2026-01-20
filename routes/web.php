@@ -480,6 +480,7 @@ Route::get('/returns', function() { return view('frontend.pages.returns'); })->n
 Route::get('/size-guide', function() { return view('frontend.pages.size-guide'); })->name('size.guide');
 Route::get('/terms', function() { return view('frontend.pages.terms'); })->name('terms');
 Route::get('/privacy', function() { return view('frontend.pages.privacy'); })->name('privacy');
+Route::get('/flash-club', function() { return view('frontend.pages.flash-club'); })->name('flash-club');
 
 
 // =====================================
@@ -530,6 +531,12 @@ Route::prefix('promo')->name('promo.')->group(function () {
     Route::get('/onedecade/verification', [App\Http\Controllers\Frontend\PromoController::class, 'showOneDecadeVerification'])->name('onedecade.verification');
 
         Route::get('/onedecade/dataverif', [App\Http\Controllers\Frontend\DataVerifController::class, 'index'])->name('onedecade.dataverif');
+
+            Route::get(
+        '/onedecade/dataverif/export-excel',
+        [App\Http\Controllers\Frontend\PromoController::class, 'exportVerificationExcel']
+    )->name('onedecade.dataverif.export.excel');
+
     
 
     // TAMBAHKAN: Route untuk testing spreadsheet connection

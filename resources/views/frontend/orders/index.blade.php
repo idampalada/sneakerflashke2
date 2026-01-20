@@ -163,13 +163,13 @@
                                     View Details
                                 </a>
                                 
-                                <!-- UPDATED: Download Invoice (for paid orders and beyond) -->
+                                <!-- UPDATED: Download Invoice (for paid orders and beyond)
                                 @if(in_array($order->status, ['paid', 'processing', 'shipped', 'delivered']))
                                     <a href="{{ route('orders.invoice', $order->order_number) }}" 
                                        class="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors">
                                         📄 Download Invoice
                                     </a>
-                                @endif
+                                @endif -->
                                 
                                 <!-- UPDATED: Retry Payment (if pending and online payment) -->
                                 @if($order->status === 'pending' && $order->payment_method !== 'cod')
@@ -192,11 +192,13 @@
                                 @endif
                                 
                                 <!-- Track Order (if shipped) -->
-                                @if($order->tracking_number)
-                                    <a href="#" class="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors">
-                                        📦 Track Package ({{ $order->tracking_number }})
-                                    </a>
-                                @endif
+@if($order->awb)
+    <a href="#"
+       class="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors">
+        📦 Track Package ({{ $order->awb }})
+    </a>
+@endif
+
                                 
                                 <!-- UPDATED: Order Actions Based on Status -->
                                 @if($order->status === 'delivered')

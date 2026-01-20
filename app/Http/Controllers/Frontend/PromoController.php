@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
+use App\Exports\PromoOneDecadeExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 
 class PromoController extends Controller
@@ -1039,4 +1041,12 @@ public function showOneDecade()
         ]);
     }
 }
+public function exportVerificationExcel()
+{
+    return Excel::download(
+        new PromoOneDecadeExport,
+        'data-verification-onedecade-' . now()->format('Ymd_His') . '.xlsx'
+    );
+}
+
 }

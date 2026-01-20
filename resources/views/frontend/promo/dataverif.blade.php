@@ -6,6 +6,14 @@
 <div class="container mx-auto px-4 py-8">
     <div class="bg-white shadow-md rounded-lg p-6">
         <h1 class="text-2xl font-bold mb-6">Data Verification</h1>
+
+        {{-- EXPORT EXCEL BUTTON --}}
+<div class="flex justify-end mb-4">
+    <a href="{{ route('promo.onedecade.dataverif.export.excel') }}"
+       class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-semibold">
+        Export Excel
+    </a>
+</div>
         
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">

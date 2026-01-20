@@ -281,13 +281,13 @@
                 ← Back to Orders
             </a>
             
-            <!-- UPDATED: Show invoice for paid orders and beyond -->
+            <!-- UPDATED: Show invoice for paid orders and beyond
             @if(in_array($order->status, ['paid', 'processing', 'shipped', 'delivered']))
                 <a href="{{ route('orders.invoice', $order->order_number) }}" 
                    class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                     📄 Download Invoice
                 </a>
-            @endif
+            @endif -->
             
             <!-- UPDATED: Cancel button only for pending orders -->
             @if($order->status === 'pending')

@@ -15,7 +15,7 @@
         "laravel/horizon": "^5.34",
         "laravel/socialite": "^5.16",
         "laravel/tinker": "^2.9",
-        "maatwebsite/excel": "~3.1.40",
+        "maatwebsite/excel": "^3.1",
         "pxlrbt/filament-excel": "^2.5",
         "socialiteproviders/apple": "^5.7",
         "socialiteproviders/google": "^4.1"

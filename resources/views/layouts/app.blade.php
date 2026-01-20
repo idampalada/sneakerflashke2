@@ -1057,7 +1057,7 @@ function mobileMenuDropdown() {
                 <div class="w-8 h-px bg-gray-400 mb-4 transition-all duration-300 group-hover:w-40"></div>
                 <ul class="space-y-2 text-sm">
                     <li><a href="/about" class="text-gray-300 hover:text-white flex items-center"><span class="mr-2">></span>About Us</a></li>
-                    <li><a href="/delivery" class="text-gray-300 hover:text-white flex items-center"><span class="mr-2">></span>Delivery</a></li>
+                    <li><a href="/shipping-info" class="text-gray-300 hover:text-white flex items-center"><span class="mr-2">></span>Delivery</a></li>
                     <li><a href="/terms" class="text-gray-300 hover:text-white flex items-center"><span class="mr-2">></span>Terms & Conditions</a></li>
                     <li><a href="/privacy" class="text-gray-300 hover:text-white flex items-center"><span class="mr-2">></span>Privacy Policy</a></li>
                     <li><a href="/flash-club" class="text-gray-300 hover:text-white flex items-center"><span class="mr-2">></span>Flash Club</a></li>

@@ -690,4 +690,18 @@ public function getSavingsBreakdown(): array
                isset($meta['komerce_order_id']) && 
                !$this->hasPickupRequested();
     }
+    /**
+ * Get AWB from meta_data or komerce_awb (fallback)
+ */
+public function getAwbAttribute(): ?string
+{
+    // 1️⃣ prioritas dari meta_data
+    if (!empty($this->meta_data['awb'])) {
+        return $this->meta_data['awb'];
+    }
+
+    // 2️⃣ fallback ke column komerce_awb
+    return $this->komerce_awb ?: null;
+}
+
 }

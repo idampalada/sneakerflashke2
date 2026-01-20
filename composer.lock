@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "a7c5b07215a2d3399079c305ae92947c",
+    "content-hash": "488d09e19438613e3b3b3680f548c7db",
     "packages": [
         {
             "name": "anourvalar/eloquent-serialize",
@@ -4285,16 +4285,16 @@
         },
         {
             "name": "maatwebsite/excel",
-            "version": "3.1.65",
+            "version": "3.1.66",
             "source": {
                 "type": "git",
                 "url": "https://github.com/SpartnerNL/Laravel-Excel.git",
-                "reference": "4ef746726f9515784846e4d02f3c0f8f3eae0f29"
+                "reference": "3b29c2426a46674f444890c45f742452a396aae8"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/SpartnerNL/Laravel-Excel/zipball/4ef746726f9515784846e4d02f3c0f8f3eae0f29",
-                "reference": "4ef746726f9515784846e4d02f3c0f8f3eae0f29",
+                "url": "https://api.github.com/repos/SpartnerNL/Laravel-Excel/zipball/3b29c2426a46674f444890c45f742452a396aae8",
+                "reference": "3b29c2426a46674f444890c45f742452a396aae8",
                 "shasum": ""
             },
             "require": {
@@ -4350,7 +4350,7 @@
             ],
             "support": {
                 "issues": "https://github.com/SpartnerNL/Laravel-Excel/issues",
-                "source": "https://github.com/SpartnerNL/Laravel-Excel/tree/3.1.65"
+                "source": "https://github.com/SpartnerNL/Laravel-Excel/tree/3.1.66"
             },
             "funding": [
                 {
@@ -4362,7 +4362,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2025-07-29T15:30:55+00:00"
+            "time": "2025-08-07T08:31:22+00:00"
         },
         {
             "name": "maennchen/zipstream-php",
