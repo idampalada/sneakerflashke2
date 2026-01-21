@@ -352,12 +352,12 @@ class KomerceOrderResource extends Resource
     }
 
     public static function getPages(): array
-    {
-        return [
-            'index' => Pages\ListKomerceOrders::route('/'),
-            'view' => Pages\ViewKomerceOrder::route('/{record}'),
-        ];
-    }
+{
+    return [
+        'index' => Pages\ListKomerceOrders::route('/'),
+        'view' => Pages\ViewKomerceOrder::route('/{record}'), // Simple approach
+    ];
+}
 
     public static function canViewAny(): bool
     {

@@ -17,7 +17,21 @@ use Illuminate\Support\Facades\Storage;
 class ViewKomerceOrder extends ViewRecord
 {
     protected static string $resource = KomerceOrderResource::class;
-
+    // FIXED: Tambah explicit route model binding
+ protected function resolveRecord($key): Order
+{
+    if (is_numeric($key)) {
+        $record = Order::find($key);
+    } else {
+        $record = Order::where('order_number', $key)->first();
+    }
+    
+    if (!$record) {
+        abort(404, 'Order not found');
+    }
+    
+    return $record;
+}
     public function infolist(Infolist $infolist): Infolist
     {
         return $infolist
@@ -298,7 +312,10 @@ Actions\Action::make('track_shipment')
                     ->send();
 
                 // Refresh current page properly
-                $this->redirect($this->getUrl());
+                $this->refreshFormData([
+    'meta_data',
+    'komerce_order_no',
+]);
             } else {
                 throw new \Exception($result['message'] ?? 'Failed to request pickup');
             }
@@ -443,7 +460,10 @@ Actions\Action::make('track_shipment')
                     ->send();
 
                 // Refresh current page properly
-                $this->redirect($this->getUrl());
+                $this->refreshFormData([
+    'meta_data',
+    'tracking_number',
+]);
             } else {
                 throw new \Exception($result['message'] ?? 'Failed to generate label');
             }
