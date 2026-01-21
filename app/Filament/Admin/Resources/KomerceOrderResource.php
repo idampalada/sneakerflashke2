@@ -42,7 +42,8 @@ class KomerceOrderResource extends Resource
             if (!Schema::hasColumn('orders', 'komerce_order_no')) {
                 return parent::getEloquentQuery()->whereRaw('1 = 0');
             }
-            return parent::getEloquentQuery()->where('status', 'paid')->orderBy('created_at', 'desc');
+            // FIXED: Remove status filter to show all orders, not just paid ones
+            return parent::getEloquentQuery()->orderBy('created_at', 'desc');
         } catch (\Exception $e) {
             return parent::getEloquentQuery()->whereRaw('1 = 0');
         }
@@ -133,7 +134,7 @@ class KomerceOrderResource extends Resource
                                 && is_object($record) 
                                 && property_exists($record, 'komerce_order_no')
                                 && property_exists($record, 'status')
-                                && $record->status === 'paid' 
+                                && in_array($record->status, ['paid', 'processing', 'shipped']) 
                                 && empty($record->komerce_order_no);
                         } catch (\Exception $e) {
                             return false;

@@ -57,9 +57,13 @@ class OrderObserver
                     $this->awardPointsForOrder($order);
                 }
             }
-        }
-    }
+                }
 
+    // ✅ TAMBAHAN BARU: Check AWB and auto-update status
+if ($order->wasChanged('meta_data') || $order->wasChanged('komerce_awb') || $order->isDirty()) {
+    $this->checkAndUpdateStatusForAwb($order);
+}
+    }
     /**
      * Handle the Order "deleted" event.
      */
@@ -248,4 +252,25 @@ class OrderObserver
         if ($spending6Months >= 5000000) return 'advance';
         return 'basic';
     }
+    /**
+ * Auto-update status jika order punya AWB tapi status masih paid
+ */
+// Update method di OrderObserver
+private function checkAndUpdateStatusForAwb(Order $order): void
+{
+    // Skip jika sedang dalam proses update status
+    if ($order->wasChanged('status')) {
+        return;
+    }
+
+    // ✅ Update logic: langsung ke shipped jika ada AWB
+    if ($order->hasAwb() && in_array($order->status, ['paid', 'processing'])) {
+        $order->updateQuietly([
+            'status' => 'shipped',        // Langsung shipped
+            'shipped_at' => now(),        // Set timestamp
+            'notes' => ($order->notes ? $order->notes . "\n" : '') . 
+                      '[' . now()->format('Y-m-d H:i:s') . '] Auto-shipped: AWB available, paket sudah dipickup (AWB: ' . $order->awb . ')'
+        ]);
+    }
+}
 }

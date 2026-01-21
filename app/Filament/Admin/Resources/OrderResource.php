@@ -203,21 +203,25 @@ class OrderResource extends Resource
                     ->columns(2),
 
                 Forms\Components\Section::make('Shipping & Tracking')
-                    ->schema([
-                        Forms\Components\TextInput::make('tracking_number')
-                            ->maxLength(255)
-                            ->label('Tracking Number')
-                            ->placeholder('Enter tracking number when shipped'),
-                            
-                        Forms\Components\DateTimePicker::make('shipped_at')
-                            ->label('Shipped At')
-                            ->placeholder('Set when order is shipped'),
-                            
-                        Forms\Components\DateTimePicker::make('delivered_at')
-                            ->label('Delivered At')
-                            ->placeholder('Set when order is delivered'),
-                    ])
-                    ->columns(3),
+    ->schema([
+        Forms\Components\Placeholder::make('awb_display')
+            ->label('AWB/Tracking Number')
+            ->content(function ($record) {
+                if (!$record) {
+                    return 'Will be generated after pickup request';
+                }
+                return $record->awb ?: 'Not generated yet';
+            }),
+            
+        Forms\Components\DateTimePicker::make('shipped_at')
+            ->label('Shipped At')
+            ->placeholder('Set when order is shipped'),
+            
+        Forms\Components\DateTimePicker::make('delivered_at')
+            ->label('Delivered At')
+            ->placeholder('Set when order is delivered'),
+    ])
+    ->columns(3),
 
                 Forms\Components\Section::make('Additional Information')
                     ->schema([
@@ -499,11 +503,22 @@ class OrderResource extends Resource
                     ->formatStateUsing(fn (string $state): string => strtoupper(str_replace('_', ' ', $state)))
                     ->badge(),
                     
-                Tables\Columns\TextColumn::make('tracking_number')
-                    ->searchable()
+                // ✅ PERBAIKAN UTAMA: Ganti tracking_number dengan awb accessor
+                Tables\Columns\TextColumn::make('awb')
+                    ->label('AWB/Tracking')
+                    ->state(function (Order $record) {
+                        $awb = $record->awb; // Menggunakan accessor getAwbAttribute()
+                        return $awb ?: '—';
+                    })
+                    ->searchable(false) // Disable search karena computed
                     ->placeholder('—')
-                    ->label('Tracking')
-                    ->copyable(),
+                    ->copyable()
+                    ->tooltip(function (Order $record) {
+                        if (!$record->awb) {
+                            return 'AWB will be generated after pickup request';
+                        }
+                        return 'Click to copy: ' . $record->awb;
+                    }),
                     
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime('d M Y, H:i')
@@ -536,6 +551,20 @@ class OrderResource extends Resource
                         'ewallet' => 'E-Wallet',
                         'cod' => 'Cash on Delivery',
                     ]),
+
+                                    // ✅ TAMBAHAN: Filter berdasarkan keberadaan AWB
+                Tables\Filters\Filter::make('has_awb')
+                    ->label('Has AWB')
+                    ->toggle()
+                    ->query(function (Builder $query, array $data) {
+                        if ($data['isActive'] ?? false) {
+                            return $query->where(function($q) {
+                                $q->whereNotNull('komerce_awb')
+                                  ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(meta_data, '$.awb')) IS NOT NULL");
+                            });
+                        }
+                        return $query;
+                    }),
 
                 Tables\Filters\Filter::make('created_at')
                     ->form([
@@ -581,6 +610,18 @@ class OrderResource extends Resource
                     ->color('gray')
                     ->url(fn (Order $record) => route('orders.print', ['orderNumber' => $record->order_number]), true)
                     ->openUrlInNewTab(),
+                                   // ✅ PERBAIKAN: Action tracking hanya muncul jika ada AWB
+                Tables\Actions\Action::make('track_shipment')
+                    ->label('Track')
+                    ->icon('heroicon-o-map-pin')
+                    ->color('info')
+                    ->visible(fn (Order $record) => !empty($record->awb))
+                    ->url(function (Order $record) {
+                        // Buat URL tracking dengan AWB
+                        return '/admin/orders/' . $record->order_number . '/track';
+                    })
+                    ->openUrlInNewTab()
+                    ->tooltip('Track shipment with AWB'),
                 
                 Tables\Actions\Action::make('mark_paid')
                     ->label('Mark Paid')
@@ -617,10 +658,15 @@ class OrderResource extends Resource
                             ->required()
                             ->placeholder('Enter tracking number'),
                     ])
-                    ->action(function (Order $record, array $data) {
+                                        ->action(function (Order $record, array $data) {
+                        // ✅ PERBAIKAN: Update AWB ke meta_data juga
+                        $meta = json_decode($record->meta_data ?? '{}', true) ?? [];
+                        $meta['awb'] = $data['awb_number'];
+                        
                         $record->update([
                             'status' => 'shipped',
-                            'tracking_number' => $data['tracking_number'],
+                            'meta_data' => json_encode($meta),
+                            'komerce_awb' => $data['awb_number'], // Backup ke column
                             'shipped_at' => now(),
                         ]);
                     })

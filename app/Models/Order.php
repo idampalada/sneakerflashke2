@@ -703,5 +703,50 @@ public function getAwbAttribute(): ?string
     // 2️⃣ fallback ke column komerce_awb
     return $this->komerce_awb ?: null;
 }
+public function updateStatusBasedOnAwb(): void
+{
+    // Jika sudah ada AWB dan status masih 'paid', ubah ke 'processing'
+    if ($this->hasAwb() && $this->status === 'paid') {
+        $this->update([
+            'status' => 'processing',
+            'notes' => ($this->notes ? $this->notes . "\n" : '') . 
+                      '[' . now()->format('Y-m-d H:i:s') . '] Status automatically updated to processing - AWB available: ' . $this->awb
+        ]);
+        
+        \Log::info('Order status auto-updated to processing', [
+            'order_id' => $this->id,
+            'order_number' => $this->order_number,
+            'awb' => $this->awb,
+            'previous_status' => 'paid',
+            'new_status' => 'processing'
+        ]);
+    }
+}
+
+/**
+ * Update AWB in meta_data and automatically update status
+ */
+public function updateAwbAndStatus(string $awb): void
+{
+    $meta = json_decode($this->meta_data ?? '{}', true) ?? [];
+    $meta['awb'] = $awb;
+    
+    $this->update([
+        'meta_data' => json_encode($meta),
+        'komerce_awb' => $awb, // Backup ke column
+    ]);
+    
+    // Auto-update status berdasarkan AWB
+    $this->updateStatusBasedOnAwb();
+}
+
+/**
+ * Check if order should be processed (has AWB but still paid)
+ */
+public function shouldBeProcessing(): bool
+{
+    return $this->hasAwb() && $this->status === 'paid';
+}
+
 
 }

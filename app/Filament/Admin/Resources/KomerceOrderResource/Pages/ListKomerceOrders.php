@@ -29,10 +29,35 @@ class ListKomerceOrders extends ListRecords
                 ->modifyQueryUsing(fn (Builder $query) => $query)
                 ->badge(fn () => $this->getModel()::count()),
 
+            'pending' => Tab::make('Pending')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'pending'))
+                ->badge(fn () => $this->getModel()::where('status', 'pending')->count())
+                ->badgeColor('warning'),
+
             'paid' => Tab::make('Paid Orders')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'paid'))
                 ->badge(fn () => $this->getModel()::where('status', 'paid')->count())
                 ->badgeColor('success'),
+
+            'processing' => Tab::make('Processing')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'processing'))
+                ->badge(fn () => $this->getModel()::where('status', 'processing')->count())
+                ->badgeColor('primary'),
+
+            'shipped' => Tab::make('Shipped')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'shipped'))
+                ->badge(fn () => $this->getModel()::where('status', 'shipped')->count())
+                ->badgeColor('info'),
+
+            'delivered' => Tab::make('Delivered')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'delivered'))
+                ->badge(fn () => $this->getModel()::where('status', 'delivered')->count())
+                ->badgeColor('success'),
+
+            'cancelled' => Tab::make('Cancelled')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'cancelled'))
+                ->badge(fn () => $this->getModel()::where('status', 'cancelled')->count())
+                ->badgeColor('danger'),
 
             'komerce_created' => Tab::make('In Komerce')
                 ->modifyQueryUsing(function (Builder $query) {
@@ -62,18 +87,9 @@ class ListKomerceOrders extends ListRecords
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereNotNull('tracking_number'))
                 ->badge(fn () => $this->getModel()::whereNotNull('tracking_number')->count())
                 ->badgeColor('primary'),
-
-            'shipped' => Tab::make('Shipped')
-                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'shipped'))
-                ->badge(fn () => $this->getModel()::where('status', 'shipped')->count())
-                ->badgeColor('success'),
-
-            'delivered' => Tab::make('Delivered')
-                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'delivered'))
-                ->badge(fn () => $this->getModel()::where('status', 'delivered')->count())
-                ->badgeColor('success'),
         ];
     }
+
 
     public function getDefaultActiveTab(): string | int | null
     {

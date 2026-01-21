@@ -173,17 +173,22 @@ class ViewKomerceOrder extends ViewRecord
                 }),
 
             // Generate Label Action
-            Actions\Action::make('generate_label')
-                ->label('Generate Label')
-                ->icon('heroicon-o-tag')
-                ->color('info')
-                ->visible(function (): bool {
-                    $record = $this->getRecord();
-                    return $record->hasPickupRequested() && !$record->tracking_number;
-                })
-                ->action(function () {
-                    $this->generateLabel();
-                }),
+            // Generate Label Action - FIXED FOR SHIPPED STATUS
+Actions\Action::make('generate_label')
+    ->label('Generate Label')
+    ->icon('heroicon-o-tag')
+    ->color('info')
+    ->visible(function (): bool {
+        $record = $this->getRecord();
+        $meta = json_decode($record->meta_data ?? '{}', true) ?? [];
+        
+        // FIXED: Allow for paid, processing, and shipped orders
+        return in_array($record->status, ['paid', 'processing', 'shipped']) 
+            && (isset($meta['komerce_order_id']) || !empty($record->komerce_order_no));
+    })
+    ->action(function () {
+        $this->generateLabel();
+    }),
 
 // Track Shipment Action (MODAL)
 Actions\Action::make('track_shipment')
@@ -206,19 +211,19 @@ Actions\Action::make('track_shipment')
     }),
 
 
-            // Download Label Action
-            Actions\Action::make('download_label')
-                ->label('Download Label')
-                ->icon('heroicon-o-arrow-down-tray')
-                ->color('success')
-                ->visible(function (): bool {
-                    $record = $this->getRecord();
-                    $meta = json_decode($record->meta_data ?? '{}', true) ?? [];
-                    return isset($meta['komerce_label']['label_url']);
-                })
-                ->action(function () {
-                    $this->downloadLabel();
-                }),
+            // // Download Label Action
+            // Actions\Action::make('download_label')
+            //     ->label('Download Label')
+            //     ->icon('heroicon-o-arrow-down-tray')
+            //     ->color('success')
+            //     ->visible(function (): bool {
+            //         $record = $this->getRecord();
+            //         $meta = json_decode($record->meta_data ?? '{}', true) ?? [];
+            //         return isset($meta['komerce_label']['label_url']);
+            //     })
+            //     ->action(function () {
+            //         $this->downloadLabel();
+            //     }),
         ];
     }
 
