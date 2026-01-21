@@ -862,36 +862,103 @@ header, nav, .nav-container, .main-navigation, .header-container {
     color: #000;
 }
 
-/* WhatsApp Floating Button */
+/* =================================
+   FOOTER SPACING FIX - SANGAT RINGKAS
+   ================================= */
+
+/* Kurangi padding footer secara ekstrem */
+footer {
+    padding-top: 1rem !important;
+    padding-bottom: 0.01rem !important;
+    margin-top: 1rem !important;
+}
+
+/* Hapus spacing section sebelum footer */
+.product-section:last-of-type,
+.best-sellers-section:last-of-type,
+.featured-products-section:last-of-type {
+    margin-bottom: 0 !important;
+    padding-bottom: 0.5rem !important;
+}
+
+/* Kurangi spacing konten ke footer */
+main {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+/* =================================
+   WHATSAPP FLOATING BUTTON - POSISI KEMBALI KE ATAS
+   ================================= */
+
+/* WhatsApp Button Container - KEMBALI KE POSISI TINGGI */
 .whatsapp-float-btn {
-    position: fixed;
-    bottom: 80px;
-    right: 15px;
-    z-index: 9999;
-    width: 56px;
-    height: 56px;
+    position: fixed !important;
+    bottom: 85px !important; /* Dikembalikan ke posisi tinggi */
+    right: 20px !important;
+    z-index: 99999 !important;
+    width: 60px !important;
+    height: 60px !important;
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
+    pointer-events: auto !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
+/* WhatsApp Button Link - STABLE VERSION */
 .whatsapp-btn-link {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background-color: #25D366;
-    color: white;
-    text-decoration: none;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 60px !important;
+    height: 60px !important;
+    border-radius: 50% !important;
+    background-color: #25D366 !important;
+    color: white !important;
+    text-decoration: none !important;
+    box-shadow: 0 4px 15px rgba(37, 211, 102, 0.4) !important;
+    position: relative !important;
+    overflow: hidden !important;
+    /* Hanya hover effect yang diizinkan */
+    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
 }
 
+/* Hover effect minimal */
+.whatsapp-btn-link:hover {
+    transform: scale(1.05) !important;
+    box-shadow: 0 6px 20px rgba(37, 211, 102, 0.6) !important;
+    background-color: #22C55E !important;
+}
+
+/* Icon WhatsApp */
 .whatsapp-btn-link i {
-    font-size: 28px;
-    margin: 0;
+    font-size: 28px !important;
+    margin: 0 !important;
+    position: relative !important;
+    z-index: 2 !important;
+    color: white !important;
 }
 
+/* HAPUS text */
 .whatsapp-text {
-    display: none;
+    display: none !important;
+}
+
+/* OVERRIDE semua animasi yang mengganggu */
+.whatsapp-float-btn,
+.whatsapp-float-btn *,
+.whatsapp-btn-link,
+.whatsapp-btn-link * {
+    animation: none !important;
+}
+
+/* HAPUS pseudo-element pulse yang mengganggu */
+.whatsapp-btn-link::before,
+.whatsapp-btn-link::after {
+    display: none !important;
+    content: none !important;
 }
 
 /* Black Friday Menu */
@@ -992,28 +1059,6 @@ header, nav, .nav-container, .main-navigation, .header-container {
     }
     50% {
         opacity: 0.8;
-    }
-}
-
-@keyframes whatsappBounce {
-    0%, 100% {
-        transform: translateY(0);
-    }
-    50% {
-        transform: translateY(-10px);
-    }
-}
-
-@keyframes whatsappPulse {
-    0% {
-        width: 0;
-        height: 0;
-        opacity: 1;
-    }
-    100% {
-        width: 100px;
-        height: 100px;
-        opacity: 0;
     }
 }
 
@@ -1131,10 +1176,21 @@ header, nav, .nav-container, .main-navigation, .header-container {
         padding-bottom: 70px;
     }
     
-    /* WhatsApp mobile */
+    /* WhatsApp mobile - KEMBALI KE POSISI TINGGI */
     .whatsapp-float-btn {
-        bottom: 90px;
-        right: 15px;
+        bottom: 90px !important; /* Kembali ke posisi tinggi, aman di atas mobile nav */
+        right: 15px !important;
+        width: 56px !important;
+        height: 56px !important;
+    }
+    
+    .whatsapp-btn-link {
+        width: 56px !important;
+        height: 56px !important;
+    }
+    
+    .whatsapp-btn-link i {
+        font-size: 26px !important;
     }
     
     /* Typography mobile */
@@ -1188,28 +1244,35 @@ header, nav, .nav-container, .main-navigation, .header-container {
 }
 
 @media (max-width: 480px) {
-    .whatsapp-text {
-        display: none;
+    /* WhatsApp extra small screens - KEMBALI KE POSISI TINGGI */
+    .whatsapp-float-btn {
+        bottom: 85px !important; /* Kembali ke posisi tinggi */
+        right: 12px !important;
+        width: 52px !important;
+        height: 52px !important;
     }
     
     .whatsapp-btn-link {
-        width: 56px;
-        height: 56px;
-        border-radius: 50%;
-        padding: 0;
-        justify-content: center;
-        align-items: center;
+        width: 52px !important;
+        height: 52px !important;
     }
     
     .whatsapp-btn-link i {
-        margin: 0;
-        font-size: 28px;
+        font-size: 24px !important;
+    }
+    
+    /* Footer mobile tetap ringkas */
+    footer {
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.25rem !important;
+        margin-top: 0.5rem !important;
     }
 }
 
+/* Print media - hide WhatsApp */
 @media print {
     .whatsapp-float-btn {
-        display: none;
+        display: none !important;
     }
 }
 
@@ -1240,4 +1303,3 @@ header + * {
     margin-top: 0;
     padding-top: 0;
 }
-

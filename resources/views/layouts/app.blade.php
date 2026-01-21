@@ -39,9 +39,13 @@
     <script defer src="https://unpkg.com/@alpinejs/focus@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     
-    <!-- Custom CSS -->
+<!-- Custom CSS -->
+@if(request()->is('/'))
+    <link rel="stylesheet" href="{{ asset('css/homefix.css') }}">
+@else
     <link rel="stylesheet" href="{{ asset('css/home.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/social-media-fix.css') }}">
+@endif
+<link rel="stylesheet" href="{{ asset('css/social-media-fix.css') }}">
     <script>
   document.addEventListener('alpine:init', () => {
     Alpine.store('ui', {
@@ -1093,7 +1097,7 @@ function mobileMenuDropdown() {
 
 
         <!-- Social Media Icons -->
-        <div class="border-t border-gray-700 mt-8 pt-8 text-center">
+        <div class="border-t border-gray-700 mt-7 pt-6 pb-2 text-center">
             <div class="max-w-7xl mx-auto px-4 lg:px-8">
                 <div class="flex justify-center space-x-6">
                     <a href="https://instagram.com/sneakers_flash" target="_blank" class="text-gray-300 hover:text-white transition-colors">
