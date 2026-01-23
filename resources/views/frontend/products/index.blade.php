@@ -3,6 +3,53 @@
 @section('title', 'Products - SneakerFlash')
 
 @section('content')
+@php
+// Function to get product URL with smallest size - FIXED VERSION
+if (!function_exists('getProductUrlWithSize')) {
+    function getProductUrlWithSize($product) {
+        $originalSlug = $product->slug ?? '#';
+        
+        // ⭐ FIX: Remove existing size pattern from slug first
+        $baseSlug = $originalSlug;
+        if (preg_match('/^(.+)-size-(\d+(?:\.\d+)?)$/', $originalSlug, $matches)) {
+            $baseSlug = $matches[1]; // Extract base slug without size
+        }
+        
+        // Collect all available sizes
+        $allSizes = collect();
+        
+        // Add current product sizes
+        if (isset($product->available_sizes) && is_array($product->available_sizes)) {
+            foreach ($product->available_sizes as $size) {
+                $allSizes->push(floatval($size));
+            }
+        }
+        
+        // Add size variants if exists
+        if (isset($product->size_variants) && is_array($product->size_variants)) {
+            foreach ($product->size_variants as $variant) {
+                if (isset($variant['size'])) {
+                    $allSizes->push(floatval($variant['size']));
+                }
+            }
+        } elseif (isset($product->size_variants) && method_exists($product->size_variants, 'pluck')) {
+            $variantSizes = $product->size_variants->pluck('size')->map(function($size) {
+                return floatval($size);
+            });
+            $allSizes = $allSizes->merge($variantSizes);
+        }
+        
+        // Get smallest size and create URL
+        if ($allSizes->isNotEmpty()) {
+            $smallestSize = $allSizes->min();
+            return route('products.show', $baseSlug . '-size-' . $smallestSize);
+        }
+        
+        // Fallback to base slug (without size)
+        return route('products.show', $baseSlug);
+    }
+}
+@endphp
     <!-- Page Header -->
     <section class="bg-white py-6 border-b border-gray-200">
         <div class="container mx-auto px-4">
@@ -128,7 +175,7 @@
                                 <!-- Product Image -->
                                 <div class="relative bg-gray-50 overflow-hidden flex items-center justify-center h-[260px] md:h-[300px]">
     @if(!empty($productImages))
-        <a href="{{ route('products.show', $product->slug ?? '#') }}">
+        <a href="{{ getProductUrlWithSize($product) }}">
             <img src="{{ $productImages[0] }}" 
                  alt="{{ $cleanProductName }}"
                  class="max-w-full max-h-full object-contain p-2 transition-transform duration-300 group-hover:scale-105"
@@ -187,8 +234,8 @@
                                     
                                     {{-- ⭐ FIXED: Use clean product name --}}
                                     <h3 class="font-semibold text-gray-900 mb-3 text-sm leading-tight">
-                                        <a href="{{ route('products.show', $product->slug ?? '#') }}" 
-                                           class="hover:text-blue-600 transition-colors">
+                                        <a href="{{ getProductUrlWithSize($product) }}" 
+   class="hover:text-blue-600 transition-colors">
                                             {{ $cleanProductName }}
                                         </a>
                                     </h3>
@@ -291,8 +338,8 @@
                                                 </button>
                                             @endif
 
-                                            <a href="{{ route('products.show', $product->slug ?? '#') }}"
-                                               class="px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center">
+                                            <a href="{{ getProductUrlWithSize($product) }}"
+   class="px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center">
                                                 <i class="fas fa-eye text-gray-600"></i>
                                             </a>
                                         </div>
