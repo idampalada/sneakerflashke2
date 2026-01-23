@@ -898,7 +898,7 @@ img[src=""], img:not([src]) {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🛒 Cart page loaded - Simple Version');
+    console.log('🛒 Cart page loaded - Simple Reload Version');
     
     // Get CSRF token
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -917,37 +917,24 @@ document.addEventListener('DOMContentLoaded', function() {
             quantityInput = document.getElementById('quantity-' + productId);
         }
         
-        console.log('Found input:', quantityInput);
-        
         if (quantityInput) {
             const currentValue = parseInt(quantityInput.value);
             const maxValue = parseInt(quantityInput.getAttribute('max')) || 999;
             
-            console.log('Current value:', currentValue, 'Max:', maxValue);
-            
             if (currentValue < maxValue) {
                 const newValue = currentValue + 1;
                 
-                // Update mobile input
+                // Update both mobile and desktop inputs
                 const mobileInput = document.getElementById('quantity-mobile-' + productId);
-                if (mobileInput) {
-                    mobileInput.value = newValue;
-                }
+                if (mobileInput) mobileInput.value = newValue;
                 
-                // Update desktop input
                 const desktopInput = document.getElementById('quantity-' + productId);
-                if (desktopInput) {
-                    desktopInput.value = newValue;
-                }
+                if (desktopInput) desktopInput.value = newValue;
                 
-                console.log('Updated to:', newValue);
                 updateCartQuantity(productId, newValue);
             } else {
-                console.log('Cannot increase above max');
                 showToast('Maximum stock reached', 'info');
             }
-        } else {
-            console.error('No quantity input found for product:', productId);
         }
     };
 
@@ -961,39 +948,27 @@ document.addEventListener('DOMContentLoaded', function() {
             quantityInput = document.getElementById('quantity-' + productId);
         }
         
-        console.log('Found input:', quantityInput);
-        
         if (quantityInput) {
             const currentValue = parseInt(quantityInput.value);
-            console.log('Current value:', currentValue);
             
             if (currentValue > 1) {
                 const newValue = currentValue - 1;
                 
-                // Update mobile input
+                // Update both mobile and desktop inputs
                 const mobileInput = document.getElementById('quantity-mobile-' + productId);
-                if (mobileInput) {
-                    mobileInput.value = newValue;
-                }
+                if (mobileInput) mobileInput.value = newValue;
                 
-                // Update desktop input
                 const desktopInput = document.getElementById('quantity-' + productId);
-                if (desktopInput) {
-                    desktopInput.value = newValue;
-                }
+                if (desktopInput) desktopInput.value = newValue;
                 
-                console.log('Updated to:', newValue);
                 updateCartQuantity(productId, newValue);
             } else {
-                console.log('Cannot decrease below 1');
                 showToast('Minimum quantity is 1', 'info');
             }
-        } else {
-            console.error('No quantity input found for product:', productId);
         }
     };
 
-    // Update Cart Quantity with actual API call
+    // Update Cart Quantity with API call
     function updateCartQuantity(productId, newQuantity) {
         console.log('Updating cart quantity:', productId, newQuantity);
         
@@ -1005,7 +980,6 @@ document.addEventListener('DOMContentLoaded', function() {
             cartItem.style.opacity = '0.7';
         }
         
-        // Make actual API call to update quantity
         fetch('/cart/update/' + encodeURIComponent(cartKey), {
             method: 'PATCH',
             headers: {
@@ -1015,39 +989,25 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             body: JSON.stringify({ quantity: newQuantity })
         })
-        .then(response => {
-            console.log('Update response status:', response.status);
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
-            console.log('Update response data:', data);
-            
-            if (data.success) {
-                // Update subtotal display
-                updateSubtotal(productId, newQuantity);
-                
-                // Update cart totals if provided
-                if (data.cart_total !== undefined) {
-                    updateCartTotals(data.cart_total);
-                }
-                
-                // Update original values
-                const desktopInput = document.getElementById('quantity-' + productId);
-                if (desktopInput) {
-                    desktopInput.setAttribute('data-original-value', newQuantity);
-                }
-                
-                showToast('Cart updated successfully', 'success');
-            } else {
-                showToast(data.message || 'Failed to update cart', 'error');
-                // Revert quantity on error
-                revertQuantity(productId);
-            }
-        })
+    if (data.success) {
+        showToast('Cart updated successfully', 'success');
+
+        // 🔥 SOLUSI SAMA SEPERTI REMOVE CART
+        setTimeout(() => {
+            window.location.reload();
+        }, 400);
+
+    } else {
+        showToast(data.message || 'Failed to update cart', 'error');
+        revertQuantity(productId);
+    }
+})
+
         .catch(error => {
             console.error('Update error:', error);
             showToast('Network error. Please try again.', 'error');
-            // Revert quantity on error
             revertQuantity(productId);
         })
         .finally(() => {
@@ -1058,7 +1018,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Update subtotal display
+    // Update subtotal display for quantity changes
     function updateSubtotal(productId, quantity) {
         const cartItem = document.querySelector(`[data-product-id="${productId}"]`);
         if (!cartItem) return;
@@ -1089,118 +1049,57 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Remove from cart with actual API call
+    // SIMPLE REMOVE: Just reload page after successful remove
     window.removeFromCart = function(productId, productName) {
-        console.log('Removing from cart:', productId, productName);
+        console.log('🗑️ Removing from cart:', productId, productName);
         
         if (confirm('Remove ' + productName + ' from cart?')) {
-            // Find both desktop and mobile cart items
-            const desktopCartItem = document.querySelector(`.hidden.md\\:block[data-product-id="${productId}"]`);
-            const mobileCartItem = document.querySelector(`.md\\:hidden.mobile-cart-item[data-product-id="${productId}"]`);
-            
-            // Use whichever exists
-            const cartItem = mobileCartItem || desktopCartItem || document.querySelector(`[data-product-id="${productId}"]`);
+            const cartItem = document.querySelector(`[data-product-id="${productId}"]`);
             const cartKey = cartItem ? cartItem.getAttribute('data-cart-key') : productId;
             
-            console.log('Found cart items - Desktop:', desktopCartItem, 'Mobile:', mobileCartItem);
+            // Show loading state
+            showToast('Removing item...', 'info');
             
             if (cartItem) {
-                console.log('Found cart item, removing...');
-                
-                // Visual feedback for both desktop and mobile
-                if (desktopCartItem) {
-                    desktopCartItem.style.opacity = '0.5';
-                    desktopCartItem.style.transform = 'scale(0.95)';
-                    desktopCartItem.style.transition = 'all 0.3s ease';
-                }
-                
-                if (mobileCartItem) {
-                    mobileCartItem.style.opacity = '0.5';
-                    mobileCartItem.style.transform = 'scale(0.95)';
-                    mobileCartItem.style.transition = 'all 0.3s ease';
-                }
-                
-                // Make actual API call to remove item
-                fetch('/cart/remove/' + encodeURIComponent(cartKey), {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': token
-                    }
-                })
-                .then(response => {
-                    console.log('Remove response status:', response.status);
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('Remove response data:', data);
-                    
-                    if (data.success) {
-                        // Remove both desktop and mobile items from DOM
-                        if (desktopCartItem) {
-                            desktopCartItem.remove();
-                            console.log('Desktop item removed from DOM');
-                        }
-                        
-                        if (mobileCartItem) {
-                            mobileCartItem.remove();
-                            console.log('Mobile item removed from DOM');
-                        }
-                        
-                        showToast(data.message || 'Item removed from cart', 'success');
-                        
-                        // Check remaining items - check both desktop and mobile
-                        const remainingDesktopItems = document.querySelectorAll('.hidden.md\\:block[data-product-id]');
-                        const remainingMobileItems = document.querySelectorAll('.md\\:hidden.mobile-cart-item[data-product-id]');
-                        const totalRemaining = Math.max(remainingDesktopItems.length, remainingMobileItems.length);
-                        
-                        console.log('Remaining desktop items:', remainingDesktopItems.length);
-                        console.log('Remaining mobile items:', remainingMobileItems.length);
-                        console.log('Total remaining:', totalRemaining);
-                        
-                        if (totalRemaining === 0) {
-                            console.log('Cart is empty, reloading page...');
-                            setTimeout(() => {
-                                window.location.reload();
-                            }, 1000);
-                        } else {
-                            // Update cart totals if provided
-                            if (data.cart_total !== undefined) {
-                                updateCartTotals(data.cart_total);
-                            }
-                        }
-                    } else {
-                        // API returned error
-                        showToast(data.message || 'Failed to remove item', 'error');
-                        // Revert visual changes
-                        if (desktopCartItem) {
-                            desktopCartItem.style.opacity = '';
-                            desktopCartItem.style.transform = '';
-                        }
-                        if (mobileCartItem) {
-                            mobileCartItem.style.opacity = '';
-                            mobileCartItem.style.transform = '';
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('Remove error:', error);
-                    showToast('Network error. Please try again.', 'error');
-                    // Revert visual changes
-                    if (desktopCartItem) {
-                        desktopCartItem.style.opacity = '';
-                        desktopCartItem.style.transform = '';
-                    }
-                    if (mobileCartItem) {
-                        mobileCartItem.style.opacity = '';
-                        mobileCartItem.style.transform = '';
-                    }
-                });
-            } else {
-                console.error('Cart item not found');
-                showToast('Error: Item not found', 'error');
+                cartItem.style.opacity = '0.5';
             }
+            
+            // Make API call to remove item
+            fetch('/cart/remove/' + encodeURIComponent(cartKey), {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': token
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message || 'Item removed from cart', 'success');
+                    
+                    // SIMPLE SOLUTION: Just reload the page
+                    setTimeout(() => {
+                        console.log('✅ Item removed successfully, reloading page...');
+                        window.location.reload();
+                    }, 500);
+                    
+                } else {
+                    showToast(data.message || 'Failed to remove item', 'error');
+                    // Revert visual changes on error
+                    if (cartItem) {
+                        cartItem.style.opacity = '';
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Remove error:', error);
+                showToast('Network error. Please try again.', 'error');
+                // Revert visual changes on error
+                if (cartItem) {
+                    cartItem.style.opacity = '';
+                }
+            });
         }
     };
 
@@ -1278,17 +1177,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Update cart totals
-    function updateCartTotals(total) {
-        const formatted = 'Rp ' + new Intl.NumberFormat('id-ID').format(total);
-        
-        const cartTotal = document.getElementById('cartTotal');
-        const finalTotal = document.getElementById('finalTotal');
-        
-        if (cartTotal) cartTotal.textContent = formatted;
-        if (finalTotal) finalTotal.textContent = formatted;
-    }
-
     // Handle quantity input changes manually
     document.querySelectorAll('.quantity-input').forEach(input => {
         input.addEventListener('change', function() {
@@ -1303,6 +1191,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    console.log('✅ Cart JavaScript initialized - Simple Version');
+    console.log('✅ Cart JavaScript initialized - Simple Reload Version');
 });
 </script>

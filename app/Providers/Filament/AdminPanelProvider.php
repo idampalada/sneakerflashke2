@@ -33,6 +33,17 @@ class AdminPanelProvider extends PanelProvider
             ->pages([
                 Pages\Dashboard::class,
             ])
+
+                        // MANUAL REGISTER GINEE RESOURCES - TAMBAHKAN INI!
+            ->resources([
+                \App\Filament\Admin\Resources\GineeSyncLogResource::class,
+            ])
+            
+            // MANUAL REGISTER GINEE PAGES - TAMBAHKAN INI!
+            ->pages([
+                Pages\Dashboard::class,
+                \App\Filament\Admin\Resources\GineeOptimization\Pages\Dashboard::class,
+            ])
             ->discoverWidgets(in: app_path('Filament/Admin/Widgets'), for: 'App\\Filament\\Admin\\Widgets')
             ->widgets([
                 Widgets\AccountWidget::class,
