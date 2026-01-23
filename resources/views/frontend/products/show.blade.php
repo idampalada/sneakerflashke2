@@ -1252,30 +1252,65 @@ if (typeof showToast === 'undefined') {
     window.hideToast = hideSimpleToast;
 }
 
-// Definisikan fungsi selectSize
+// GANTI function selectSize yang lama dengan ini:
 window.selectSize = function(element) {
-    var size = element.getAttribute('data-size');
-    var stock = element.getAttribute('data-stock');
-    var productId = element.getAttribute('data-product-id');
-    var price = element.getAttribute('data-price') || '0';
+    console.log('🔧 selectSize called with element:', element);
     
-    // Perbarui URL dengan ukuran yang dipilih (tanpa titik)
-    var currentUrl = window.location.href;
-    var urlParts = currentUrl.split('-');
-    var lastPart = urlParts[urlParts.length - 1];
+    const size = element.getAttribute('data-size');
+    const productId = element.getAttribute('data-product-id');
+    const stock = element.getAttribute('data-stock');
+    const price = element.getAttribute('data-price');
     
-    // Cek apakah bagian terakhir URL adalah angka atau angka dengan titik
-    if (!isNaN(lastPart) || lastPart.match(/^\d+\.\d+$/)) {
-        // Ganti ukuran di URL - hapus titik
-        var cleanSize = size.toString().replace('.', '');
-        urlParts[urlParts.length - 1] = cleanSize;
-        var newUrl = urlParts.join('-');
-        
-        // Refresh halaman dengan URL baru
-        window.location.href = newUrl;
+    console.log('📦 Size selection data:', {size, productId, stock, price});
+    
+    // Remove active class from all size buttons
+    document.querySelectorAll('.size-option').forEach(btn => {
+        btn.classList.remove('border-blue-500', 'bg-blue-50', 'ring-2', 'ring-blue-500');
+        btn.classList.add('border-gray-300', 'bg-white');
+    });
+    
+    // Add active class to selected button
+    element.classList.remove('border-gray-300', 'bg-white');
+    element.classList.add('border-blue-500', 'bg-blue-50', 'ring-2', 'ring-blue-500');
+    
+    // ⭐ YANG PALING PENTING: Set the selected size value ke hidden input
+    const sizeInput = document.getElementById('selectedSizeValue');
+    const productInput = document.getElementById('selectedProductId');
+    
+    if (sizeInput) {
+        sizeInput.value = size;
+        console.log('✅ Size input set to:', size);
+    } else {
+        console.error('❌ selectedSizeValue input not found!');
     }
+    
+    if (productInput && productId) {
+        productInput.value = productId;
+        console.log('✅ Product ID set to:', productId);
+    }
+    
+    // Update quantity max berdasarkan stock
+    const quantityInput = document.getElementById('quantity');
+    const maxQuantityText = document.getElementById('maxQuantityText');
+    
+    if (quantityInput && stock) {
+        quantityInput.setAttribute('max', stock);
+        if (maxQuantityText) {
+            maxQuantityText.textContent = `Max: ${stock}`;
+        }
+    }
+    
+    // Enable add to cart button jika ada
+    const addToCartBtn = document.querySelector('#addToCartForm button[type="submit"]');
+    if (addToCartBtn) {
+        addToCartBtn.disabled = false;
+        if (addToCartBtn.innerHTML.includes('Select Size')) {
+            addToCartBtn.innerHTML = '<i class="fas fa-shopping-cart"></i>';
+        }
+    }
+    
+    console.log('🎯 Size selection completed successfully');
 };
-
 // Tambahkan fungsi untuk copy URL yang benar
 window.copyProductLink = function(button) {
     // Ambil input di sebelahnya
