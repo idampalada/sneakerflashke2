@@ -150,7 +150,7 @@ if (!filter_var($imageUrl, FILTER_VALIDATE_URL)) {
                                 <div class="flex flex-col items-center space-y-4">
                                     <div class="flex items-center space-x-0 border border-gray-200 rounded-lg overflow-hidden">
                                         <button type="button" 
-                                                onclick="decreaseQuantity('{{ $item['id'] ?? '' }}')"
+                                                onclick="decreaseQuantity('{{ $cartKey }}')"
                                                 class="decrease-btn w-10 h-10 bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                 {{ $currentQuantity <= 1 ? 'disabled' : '' }}
                                                 data-product-id="{{ $item['id'] ?? '' }}">
@@ -158,7 +158,7 @@ if (!filter_var($imageUrl, FILTER_VALIDATE_URL)) {
                                         </button>
                                         
                                         <input type="number" 
-                                               id="quantity-{{ $item['id'] ?? '' }}"
+                                               id="quantity-{{ $cartKey }}"
                                                value="{{ $currentQuantity }}" 
                                                min="1"
                                                max="{{ $stockQuantity }}"
@@ -168,7 +168,7 @@ if (!filter_var($imageUrl, FILTER_VALIDATE_URL)) {
                                                data-original-value="{{ $currentQuantity }}">
                                         
                                         <button type="button" 
-                                                onclick="increaseQuantity('{{ $item['id'] ?? '' }}')"
+                                                onclick="increaseQuantity('{{ $cartKey }}')"
                                                 class="increase-btn w-10 h-10 bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                 {{ $currentQuantity >= $stockQuantity ? 'disabled' : '' }}
                                                 data-product-id="{{ $item['id'] ?? '' }}">
@@ -179,7 +179,7 @@ if (!filter_var($imageUrl, FILTER_VALIDATE_URL)) {
                                     <!-- Subtotal -->
                                     <div class="text-center">
                                         <p class="text-sm text-gray-500">Subtotal</p>
-                                        <p class="font-bold text-gray-900" id="subtotal-{{ $item['id'] ?? '' }}">
+                                        <p class="font-bold text-gray-900" id="subtotal-{{ $cartKey }}">
                                             Rp {{ number_format($subtotal, 0, ',', '.') }}
                                         </p>
                                     </div>
@@ -274,7 +274,7 @@ if (!filter_var($imageUrl, FILTER_VALIDATE_URL)) {
                                     <div class="mobile-quantity-container">
                                         <div class="mobile-quantity-controls">
                                             <button type="button" 
-                                                    onclick="decreaseQuantity('{{ $item['id'] ?? '' }}')"
+                                                    onclick="decreaseQuantity('{{ $cartKey }}')"
                                                     class="mobile-quantity-btn"
                                                     {{ $currentQuantity <= 1 ? 'disabled' : '' }}
                                                     data-product-id="{{ $item['id'] ?? '' }}">
@@ -282,7 +282,7 @@ if (!filter_var($imageUrl, FILTER_VALIDATE_URL)) {
                                             </button>
                                             
                                             <input type="number" 
-                                                   id="quantity-mobile-{{ $item['id'] ?? '' }}"
+                                                   id="quantity-mobile-{{ $cartKey }}"
                                                    class="mobile-quantity-input"
                                                    value="{{ $currentQuantity }}"
                                                    min="1"
@@ -292,7 +292,7 @@ if (!filter_var($imageUrl, FILTER_VALIDATE_URL)) {
                                                    readonly>
                                             
                                             <button type="button" 
-                                                    onclick="increaseQuantity('{{ $item['id'] ?? '' }}')"
+                                                    onclick="increaseQuantity('{{ $cartKey }}')"
                                                     class="mobile-quantity-btn"
                                                     {{ $currentQuantity >= $stockQuantity ? 'disabled' : '' }}
                                                     data-product-id="{{ $item['id'] ?? '' }}">
@@ -312,7 +312,7 @@ if (!filter_var($imageUrl, FILTER_VALIDATE_URL)) {
                                     </button>
                                     
                                     <div class="text-right mt-2">
-                                        <div class="mobile-cart-price" id="subtotal-mobile-{{ $item['id'] ?? '' }}">
+                                        <div class="mobile-cart-price" id="subtotal-mobile-{{ $cartKey }}">
                                             Rp {{ number_format($subtotal, 0, ',', '.') }}
                                         </div>
                                     </div>
@@ -895,10 +895,9 @@ img[src=""], img:not([src]) {
 }
     </style>
 
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🛒 Cart page loaded - Simple Reload Version');
+    console.log('🛒 Cart page loaded - FIXED Version with cartKey support');
     
     // Get CSRF token
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -907,14 +906,14 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
-    // Simple Increase Quantity Function
-    window.increaseQuantity = function(productId) {
-        console.log('Increasing quantity for:', productId);
+    // ✅ FIXED: Increase Quantity Function - Now uses cartKey
+    window.increaseQuantity = function(cartKey) {
+        console.log('🔺 Increasing quantity for cartKey:', cartKey);
         
-        // Try mobile input first, then desktop
-        let quantityInput = document.getElementById('quantity-mobile-' + productId);
+        // Find quantity input using cartKey
+        let quantityInput = document.getElementById('quantity-mobile-' + cartKey);
         if (!quantityInput) {
-            quantityInput = document.getElementById('quantity-' + productId);
+            quantityInput = document.getElementById('quantity-' + cartKey);
         }
         
         if (quantityInput) {
@@ -924,28 +923,25 @@ document.addEventListener('DOMContentLoaded', function() {
             if (currentValue < maxValue) {
                 const newValue = currentValue + 1;
                 
-                // Update both mobile and desktop inputs
-                const mobileInput = document.getElementById('quantity-mobile-' + productId);
-                if (mobileInput) mobileInput.value = newValue;
-                
-                const desktopInput = document.getElementById('quantity-' + productId);
-                if (desktopInput) desktopInput.value = newValue;
-                
-                updateCartQuantity(productId, newValue);
+                // Update both mobile and desktop inputs using cartKey
+                updateAllQuantityInputs(cartKey, newValue);
+                updateCartQuantity(cartKey, newValue);
             } else {
                 showToast('Maximum stock reached', 'info');
             }
+        } else {
+            console.error('❌ Quantity input not found for cartKey:', cartKey);
         }
     };
 
-    // Simple Decrease Quantity Function
-    window.decreaseQuantity = function(productId) {
-        console.log('Decreasing quantity for:', productId);
+    // ✅ FIXED: Decrease Quantity Function - Now uses cartKey
+    window.decreaseQuantity = function(cartKey) {
+        console.log('🔻 Decreasing quantity for cartKey:', cartKey);
         
-        // Try mobile input first, then desktop
-        let quantityInput = document.getElementById('quantity-mobile-' + productId);
+        // Find quantity input using cartKey
+        let quantityInput = document.getElementById('quantity-mobile-' + cartKey);
         if (!quantityInput) {
-            quantityInput = document.getElementById('quantity-' + productId);
+            quantityInput = document.getElementById('quantity-' + cartKey);
         }
         
         if (quantityInput) {
@@ -954,29 +950,41 @@ document.addEventListener('DOMContentLoaded', function() {
             if (currentValue > 1) {
                 const newValue = currentValue - 1;
                 
-                // Update both mobile and desktop inputs
-                const mobileInput = document.getElementById('quantity-mobile-' + productId);
-                if (mobileInput) mobileInput.value = newValue;
-                
-                const desktopInput = document.getElementById('quantity-' + productId);
-                if (desktopInput) desktopInput.value = newValue;
-                
-                updateCartQuantity(productId, newValue);
+                // Update both mobile and desktop inputs using cartKey
+                updateAllQuantityInputs(cartKey, newValue);
+                updateCartQuantity(cartKey, newValue);
             } else {
                 showToast('Minimum quantity is 1', 'info');
             }
+        } else {
+            console.error('❌ Quantity input not found for cartKey:', cartKey);
         }
     };
 
-    // Update Cart Quantity with API call
-    function updateCartQuantity(productId, newQuantity) {
-        console.log('Updating cart quantity:', productId, newQuantity);
+    // ✅ NEW: Helper function to update all quantity inputs for a cartKey
+    function updateAllQuantityInputs(cartKey, newValue) {
+        const mobileInput = document.getElementById('quantity-mobile-' + cartKey);
+        const desktopInput = document.getElementById('quantity-' + cartKey);
         
-        const cartItem = document.querySelector(`[data-product-id="${productId}"]`);
-        const cartKey = cartItem ? cartItem.getAttribute('data-cart-key') : productId;
+        if (mobileInput) {
+            mobileInput.value = newValue;
+            mobileInput.setAttribute('data-original-value', newValue);
+        }
+        
+        if (desktopInput) {
+            desktopInput.value = newValue;
+            desktopInput.setAttribute('data-original-value', newValue);
+        }
+    }
+
+    // ✅ FIXED: Update Cart Quantity - Now properly uses cartKey
+    function updateCartQuantity(cartKey, newQuantity) {
+        console.log('📡 Updating cart quantity for cartKey:', cartKey, 'to:', newQuantity);
         
         // Show loading state
+        const cartItem = document.querySelector(`[data-cart-key="${cartKey}"]`);
         if (cartItem) {
+            cartItem.setAttribute('data-loading', 'true');
             cartItem.style.opacity = '0.7';
         }
         
@@ -991,71 +999,43 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(data => {
-    if (data.success) {
-        showToast('Cart updated successfully', 'success');
-
-        // 🔥 SOLUSI SAMA SEPERTI REMOVE CART
-        setTimeout(() => {
-            window.location.reload();
-        }, 400);
-
-    } else {
-        showToast(data.message || 'Failed to update cart', 'error');
-        revertQuantity(productId);
-    }
-})
-
+            if (data.success) {
+                showToast('Cart updated successfully!', 'success');
+                
+                // Reload page to get updated totals
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
+                
+            } else {
+                showToast(data.message || 'Failed to update cart', 'error');
+                revertQuantity(cartKey);
+            }
+        })
         .catch(error => {
-            console.error('Update error:', error);
+            console.error('❌ Update error:', error);
             showToast('Network error. Please try again.', 'error');
-            revertQuantity(productId);
+            revertQuantity(cartKey);
         })
         .finally(() => {
             // Remove loading state
             if (cartItem) {
+                cartItem.removeAttribute('data-loading');
                 cartItem.style.opacity = '';
             }
         });
     }
 
-    // Update subtotal display for quantity changes
-    function updateSubtotal(productId, quantity) {
-        const cartItem = document.querySelector(`[data-product-id="${productId}"]`);
-        if (!cartItem) return;
-
-        // Find price element
-        const priceElement = cartItem.querySelector('.text-lg.font-bold, .mobile-cart-price');
-        if (!priceElement) return;
-
-        // Extract price (remove non-digits)
-        const priceText = priceElement.textContent.replace(/[^\d]/g, '');
-        const price = parseInt(priceText);
-        
-        if (price) {
-            const newSubtotal = price * quantity;
-            const formattedSubtotal = 'Rp ' + new Intl.NumberFormat('id-ID').format(newSubtotal);
-            
-            // Update desktop subtotal
-            const subtotalElement = document.getElementById('subtotal-' + productId);
-            if (subtotalElement) {
-                subtotalElement.textContent = formattedSubtotal;
-            }
-            
-            // Update mobile subtotal
-            const mobileSubtotalElement = document.getElementById('subtotal-mobile-' + productId);
-            if (mobileSubtotalElement) {
-                mobileSubtotalElement.textContent = formattedSubtotal;
-            }
-        }
-    }
-
-    // SIMPLE REMOVE: Just reload page after successful remove
+    // ✅ FIXED: Remove from cart function
     window.removeFromCart = function(productId, productName) {
-        console.log('🗑️ Removing from cart:', productId, productName);
+        console.log('🗑️ Removing from cart - productId:', productId, 'name:', productName);
         
         if (confirm('Remove ' + productName + ' from cart?')) {
+            // Find cartKey from productId
             const cartItem = document.querySelector(`[data-product-id="${productId}"]`);
             const cartKey = cartItem ? cartItem.getAttribute('data-cart-key') : productId;
+            
+            console.log('📡 Using cartKey for removal:', cartKey);
             
             // Show loading state
             showToast('Removing item...', 'info');
@@ -1078,11 +1058,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success) {
                     showToast(data.message || 'Item removed from cart', 'success');
                     
-                    // SIMPLE SOLUTION: Just reload the page
+                    // Reload page to update cart
                     setTimeout(() => {
                         console.log('✅ Item removed successfully, reloading page...');
                         window.location.reload();
-                    }, 500);
+                    }, 600);
                     
                 } else {
                     showToast(data.message || 'Failed to remove item', 'error');
@@ -1093,7 +1073,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(error => {
-                console.error('Remove error:', error);
+                console.error('❌ Remove error:', error);
                 showToast('Network error. Please try again.', 'error');
                 // Revert visual changes on error
                 if (cartItem) {
@@ -1103,9 +1083,42 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
+    // ✅ FIXED: Revert quantity on error - Now uses cartKey
+    function revertQuantity(cartKey) {
+        console.log('🔄 Reverting quantity for cartKey:', cartKey);
+        
+        const mobileInput = document.getElementById('quantity-mobile-' + cartKey);
+        const desktopInput = document.getElementById('quantity-' + cartKey);
+        
+        if (mobileInput) {
+            const originalValue = mobileInput.getAttribute('data-original-value') || '1';
+            mobileInput.value = originalValue;
+        }
+        
+        if (desktopInput) {
+            const originalValue = desktopInput.getAttribute('data-original-value') || '1';
+            desktopInput.value = originalValue;
+        }
+    }
+
+    // ✅ FIXED: Handle manual quantity input changes - Now uses cartKey
+    document.querySelectorAll('.quantity-input').forEach(input => {
+        input.addEventListener('change', function() {
+            const cartKey = this.getAttribute('data-cart-key');
+            const quantity = parseInt(this.value) || 1;
+            const originalValue = parseInt(this.getAttribute('data-original-value')) || 1;
+            
+            if (cartKey && quantity !== originalValue && quantity >= 1) {
+                console.log('📝 Manual quantity change for cartKey:', cartKey, 'to:', quantity);
+                updateAllQuantityInputs(cartKey, quantity);
+                updateCartQuantity(cartKey, quantity);
+            }
+        });
+    });
+
     // Proceed to checkout
     window.proceedToCheckout = function() {
-        const cartItems = document.querySelectorAll('[data-product-id]');
+        const cartItems = document.querySelectorAll('[data-cart-key]');
         if (cartItems.length === 0) {
             showToast('Your cart is empty', 'error');
             return;
@@ -1121,7 +1134,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Redirect to checkout
         setTimeout(() => {
             window.location.href = '/checkout';
-        }, 500);
+        }, 600);
     };
 
     // Show toast notification
@@ -1163,34 +1176,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    // Revert quantity on error
-    function revertQuantity(productId) {
-        const quantityInput = document.getElementById('quantity-' + productId);
-        const mobileQuantityInput = document.getElementById('quantity-mobile-' + productId);
-        
-        if (quantityInput) {
-            const originalValue = quantityInput.getAttribute('data-original-value') || '1';
-            quantityInput.value = originalValue;
-            if (mobileQuantityInput) {
-                mobileQuantityInput.value = originalValue;
-            }
-        }
-    }
-
-    // Handle quantity input changes manually
-    document.querySelectorAll('.quantity-input').forEach(input => {
-        input.addEventListener('change', function() {
-            const productId = this.getAttribute('data-product-id');
-            const quantity = parseInt(this.value) || 1;
-            const originalValue = parseInt(this.getAttribute('data-original-value')) || 1;
-            
-            if (quantity !== originalValue && quantity >= 1) {
-                updateCartQuantity(productId, quantity);
-                this.setAttribute('data-original-value', quantity);
-            }
-        });
-    });
-
-    console.log('✅ Cart JavaScript initialized - Simple Reload Version');
+    console.log('✅ FIXED Cart JavaScript initialized with proper cartKey support');
 });
 </script>

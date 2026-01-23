@@ -538,6 +538,12 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const formData = new FormData(addToCartForm);
         
+        // 🐛 DEBUG: Log form data untuk debugging
+        console.log('🛒 Form data being sent:');
+        for (let [key, value] of formData.entries()) {
+            console.log(`${key}: ${value}`);
+        }
+        
         fetch(addToCartForm.action, {
             method: 'POST',
             body: formData,
@@ -585,7 +591,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Get product details
         const productId = btn.getAttribute('data-product-id');
         const quantityInput = document.getElementById('quantity');
-        const sizeSelect = document.getElementById('size');
+        const sizeInput = document.getElementById('selectedSizeValue');
         
         if (!productId) {
             showToast('Product information not found', 'error');
@@ -593,7 +599,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         const quantity = quantityInput ? parseInt(quantityInput.value) || 1 : 1;
-        const size = sizeSelect ? sizeSelect.value : null;
+        const size = sizeInput ? sizeInput.value : '';
         
         // Disable button and show loading
         btn.disabled = true;
@@ -607,6 +613,12 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.append('size', size);
         }
         formData.append('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
+        
+        // 🐛 DEBUG: Log buy now data
+        console.log('🚀 Buy Now data being sent:');
+        for (let [key, value] of formData.entries()) {
+            console.log(`${key}: ${value}`);
+        }
         
         // First add to cart, then redirect to checkout
         fetch('/cart/add', {
@@ -1096,163 +1108,9 @@ console.log('✅ Enhanced product page loaded with authentication checks for Add
 .text-yellow-600 { color: #d97706; }
 .text-orange-600 { color: #ea580c; }
 </style>
-@endsection
-
-<!-- Toast Notification Component -->
-<!-- Letakkan di bagian bawah layout atau di show.blade.php -->
-<div id="toastNotification" class="fixed top-20 right-4 z-50 max-w-sm w-full bg-white border border-gray-300 rounded-lg shadow-lg p-4 hidden animate-slide-in-right">
-    <div class="flex items-center">
-        <div class="flex-shrink-0">
-            <i id="toastIcon" class="fas fa-check-circle text-green-500"></i>
-        </div>
-        <div class="ml-3 flex-1">
-            <p id="toastMessage" class="text-sm font-medium text-gray-900"></p>
-        </div>
-        <div class="ml-4 flex-shrink-0 flex">
-            <button onclick="hideToast()" class="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                <span class="sr-only">Close</span>
-                <i class="fas fa-times h-4 w-4"></i>
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- CSS untuk animations -->
-<style>
-@keyframes slide-in-right {
-    from {
-        transform: translateX(100%);
-        opacity: 0;
-    }
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
-}
-
-@keyframes slide-out-right {
-    from {
-        transform: translateX(0);
-        opacity: 1;
-    }
-    to {
-        transform: translateX(100%);
-        opacity: 0;
-    }
-}
-
-.animate-slide-in-right {
-    animation: slide-in-right 0.3s ease-out;
-}
-
-.animate-slide-out-right {
-    animation: slide-out-right 0.3s ease-in;
-}
-
-/* Toast variants */
-.toast-success {
-    @apply bg-green-50 border-green-200;
-}
-
-.toast-error {
-    @apply bg-red-50 border-red-200;
-}
-
-.toast-info {
-    @apply bg-blue-50 border-blue-200;
-}
-
-.toast-warning {
-    @apply bg-yellow-50 border-yellow-200;
-}
-
-/* Responsive */
-@media (max-width: 640px) {
-    #toastNotification {
-        @apply left-4 right-4 max-w-none;
-    }
-}
-
-</style>
-
-<!-- Alternative: Simple Toast without animations -->
-<div id="simpleToast" class="fixed top-20 right-4 z-50 max-w-sm w-full hidden">
-    <div class="bg-white border border-gray-300 rounded-lg shadow-lg p-4">
-        <div class="flex items-center">
-            <div class="flex-shrink-0">
-                <i id="simpleToastIcon" class="fas fa-check-circle text-green-500"></i>
-            </div>
-            <div class="ml-3 flex-1">
-                <p id="simpleToastMessage" class="text-sm font-medium text-gray-900"></p>
-            </div>
-            <div class="ml-4 flex-shrink-0">
-                <button onclick="hideSimpleToast()" class="text-gray-400 hover:text-gray-500">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <script>
-// Simple toast functions if the main JavaScript isn't loaded
-// Simple toast functions if the main JavaScript isn't loaded
-if (typeof showToast === 'undefined') {
-    function showSimpleToast(message, type = 'success') {
-        const toast = document.getElementById('simpleToast');
-        const icon = document.getElementById('simpleToastIcon');
-        const messageEl = document.getElementById('simpleToastMessage');
-        
-        if (!toast || !icon || !messageEl) return;
-        
-        messageEl.textContent = message;
-        
-        // Set icon and colors based on type
-        icon.className = 'fas ';
-        const toastDiv = toast.querySelector('div');
-        
-        switch(type) {
-            case 'success':
-                icon.className += 'fa-check-circle text-green-500';
-                toastDiv.className = toastDiv.className.replace(/bg-\w+-50/, 'bg-green-50');
-                toastDiv.className = toastDiv.className.replace(/border-\w+-300/, 'border-green-300');
-                break;
-            case 'error':
-                icon.className += 'fa-exclamation-circle text-red-500';
-                toastDiv.className = toastDiv.className.replace(/bg-\w+-50/, 'bg-red-50');
-                toastDiv.className = toastDiv.className.replace(/border-\w+-300/, 'border-red-300');
-                break;
-            case 'info':
-                icon.className += 'fa-info-circle text-blue-500';
-                toastDiv.className = toastDiv.className.replace(/bg-\w+-50/, 'bg-blue-50');
-                toastDiv.className = toastDiv.className.replace(/border-\w+-300/, 'border-blue-300');
-                break;
-            case 'warning':
-                icon.className += 'fa-exclamation-triangle text-yellow-500';
-                toastDiv.className = toastDiv.className.replace(/bg-\w+-50/, 'bg-yellow-50');
-                toastDiv.className = toastDiv.className.replace(/border-\w+-300/, 'border-yellow-300');
-                break;
-        }
-        
-        toast.classList.remove('hidden');
-        
-        // Auto-hide after 3 seconds
-        setTimeout(() => hideSimpleToast(), 3000);
-    }
-    
-    function hideSimpleToast() {
-        const toast = document.getElementById('simpleToast');
-        if (toast) {
-            toast.classList.add('hidden');
-        }
-    }
-    
-    // Make functions globally available
-    window.showToast = showSimpleToast;
-    window.hideToast = hideSimpleToast;
-}
-
-// GANTI function selectSize yang lama dengan ini:
+// ⭐ HYBRID SOLUTION: Menggabungkan URL refresh dari kode 1 + Size input dari kode 2
 window.selectSize = function(element) {
     console.log('🔧 selectSize called with element:', element);
     
@@ -1263,23 +1121,15 @@ window.selectSize = function(element) {
     
     console.log('📦 Size selection data:', {size, productId, stock, price});
     
-    // Remove active class from all size buttons
-    document.querySelectorAll('.size-option').forEach(btn => {
-        btn.classList.remove('border-blue-500', 'bg-blue-50', 'ring-2', 'ring-blue-500');
-        btn.classList.add('border-gray-300', 'bg-white');
-    });
-    
-    // Add active class to selected button
-    element.classList.remove('border-gray-300', 'bg-white');
-    element.classList.add('border-blue-500', 'bg-blue-50', 'ring-2', 'ring-blue-500');
-    
-    // ⭐ YANG PALING PENTING: Set the selected size value ke hidden input
+    // 1. PERTAMA: Update form inputs (dari kode 2) - DILAKUKAN SEBELUM REFRESH
     const sizeInput = document.getElementById('selectedSizeValue');
     const productInput = document.getElementById('selectedProductId');
     
     if (sizeInput) {
         sizeInput.value = size;
         console.log('✅ Size input set to:', size);
+        // Simpan ke sessionStorage untuk persist setelah refresh
+        sessionStorage.setItem('selectedSize', size);
     } else {
         console.error('❌ selectedSizeValue input not found!');
     }
@@ -1287,9 +1137,20 @@ window.selectSize = function(element) {
     if (productInput && productId) {
         productInput.value = productId;
         console.log('✅ Product ID set to:', productId);
+        // Simpan ke sessionStorage untuk persist setelah refresh
+        sessionStorage.setItem('selectedProductId', productId);
     }
     
-    // Update quantity max berdasarkan stock
+    // 2. Update UI selection
+    document.querySelectorAll('.size-option').forEach(btn => {
+        btn.classList.remove('border-blue-500', 'bg-blue-50', 'ring-2', 'ring-blue-500');
+        btn.classList.add('border-gray-300', 'bg-white');
+    });
+    
+    element.classList.remove('border-gray-300', 'bg-white');
+    element.classList.add('border-blue-500', 'bg-blue-50', 'ring-2', 'ring-blue-500');
+    
+    // 3. Update quantity controls
     const quantityInput = document.getElementById('quantity');
     const maxQuantityText = document.getElementById('maxQuantityText');
     
@@ -1300,7 +1161,7 @@ window.selectSize = function(element) {
         }
     }
     
-    // Enable add to cart button jika ada
+    // 4. Enable add to cart button
     const addToCartBtn = document.querySelector('#addToCartForm button[type="submit"]');
     if (addToCartBtn) {
         addToCartBtn.disabled = false;
@@ -1309,8 +1170,56 @@ window.selectSize = function(element) {
         }
     }
     
+    // 5. KEDUA: Update URL dan refresh (dari kode 1) - DILAKUKAN TERAKHIR
+    var currentUrl = window.location.href;
+    var urlParts = currentUrl.split('-');
+    var lastPart = urlParts[urlParts.length - 1];
+    
+    // Cek apakah bagian terakhir URL adalah angka atau angka dengan titik
+    if (!isNaN(lastPart) || lastPart.match(/^\d+\.\d+$/)) {
+        // Ganti ukuran di URL - hapus titik
+        var cleanSize = size.toString().replace('.', '');
+        urlParts[urlParts.length - 1] = cleanSize;
+        var newUrl = urlParts.join('-');
+        
+        console.log('🌐 URL will change from:', currentUrl, 'to:', newUrl);
+        
+        // Small delay untuk memastikan form sudah terupdate
+        setTimeout(() => {
+            // Refresh halaman dengan URL baru
+            window.location.href = newUrl;
+        }, 100); // 100ms delay
+    }
+    
     console.log('🎯 Size selection completed successfully');
 };
+
+// Restore selected values after page load (jika ada refresh)
+document.addEventListener('DOMContentLoaded', function() {
+    const savedSize = sessionStorage.getItem('selectedSize');
+    const savedProductId = sessionStorage.getItem('selectedProductId');
+    
+    if (savedSize) {
+        const sizeInput = document.getElementById('selectedSizeValue');
+        if (sizeInput) {
+            sizeInput.value = savedSize;
+            console.log('🔄 Restored size:', savedSize);
+        }
+        // Clear dari sessionStorage setelah restore
+        sessionStorage.removeItem('selectedSize');
+    }
+    
+    if (savedProductId) {
+        const productInput = document.getElementById('selectedProductId');
+        if (productInput) {
+            productInput.value = savedProductId;
+            console.log('🔄 Restored product ID:', savedProductId);
+        }
+        // Clear dari sessionStorage setelah restore
+        sessionStorage.removeItem('selectedProductId');
+    }
+});
+
 // Tambahkan fungsi untuk copy URL yang benar
 window.copyProductLink = function(button) {
     // Ambil input di sebelahnya
@@ -1332,3 +1241,4 @@ window.copyProductLink = function(button) {
     }, 2000);
 };
 </script>
+@endsection
