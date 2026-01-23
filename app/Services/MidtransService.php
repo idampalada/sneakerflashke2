@@ -402,7 +402,10 @@ public function handleNotification($notification)
             'transaction_status' => $notification['transaction_status'] ?? 'unknown',
             'payment_type' => $notification['payment_type'] ?? 'unknown',
             'fraud_status' => $notification['fraud_status'] ?? 'unknown',
-            'signature_key' => isset($notification['signature_key']) ? 'present' : 'missing'
+            'signature_key' => isset($notification['signature_key']) ? 'present' : 'missing',
+            'transaction_time' => $notification['transaction_time'] ?? null,
+            'settlement_time' => $notification['settlement_time'] ?? null,
+            'expiry_time' => $notification['expiry_time'] ?? null
         ]);
 
         // Verify notification signature
@@ -413,11 +416,89 @@ public function handleNotification($notification)
 
         Log::info('✅ Signature verification passed');
 
-        // FIXED: Use webhook notification data directly (no API double-check)
-        $transactionStatus = $notification['transaction_status'] ?? '';
-        $fraudStatus = $notification['fraud_status'] ?? 'accept';
-        $paymentType = $notification['payment_type'] ?? '';
+        // 🔍 VALIDATION 1: Check if transaction is expired
+        $expiryTime = $notification['expiry_time'] ?? null;
+        if ($expiryTime && strtotime($expiryTime) < time()) {
+            Log::warning('⚠️ Transaction expired, ignoring webhook', [
+                'order_id' => $notification['order_id'],
+                'expiry_time' => $expiryTime,
+                'current_time' => date('Y-m-d H:i:s')
+            ]);
+            return null;
+        }
 
+        // 🔍 VALIDATION 2: Detect suspicious settlement timing
+        $transactionTime = $notification['transaction_time'] ?? null;
+        $settlementTime = $notification['settlement_time'] ?? null;
+        $transactionStatus = $notification['transaction_status'] ?? '';
+        
+        $isSuspiciousTiming = false;
+        if ($transactionTime && $settlementTime && $transactionStatus === 'settlement') {
+            $timeDiff = abs(strtotime($settlementTime) - strtotime($transactionTime));
+            if ($timeDiff > 300) { // More than 5 minutes gap
+                $isSuspiciousTiming = true;
+                Log::warning('⚠️ Suspicious settlement timing detected', [
+                    'order_id' => $notification['order_id'],
+                    'transaction_time' => $transactionTime,
+                    'settlement_time' => $settlementTime,
+                    'time_diff_seconds' => $timeDiff
+                ]);
+            }
+        }
+
+        // 🔍 VALIDATION 3: Double-check suspicious notifications OR clear cache for settlement
+        $fraudStatus = $notification['fraud_status'] ?? 'accept';
+        
+        if ($isSuspiciousTiming) {
+            Log::info('🔄 Double-checking with Midtrans API due to suspicious timing');
+            
+            // 🚨 PERBAIKAN: Don't use cache for settlement verification
+            $apiStatus = $this->getTransactionStatus($notification['order_id'], false); // useCache = false
+            
+            if ($apiStatus) {
+                $apiTransactionStatus = $apiStatus['transaction_status'] ?? '';
+                $apiFraudStatus = $apiStatus['fraud_status'] ?? 'accept';
+                
+                // If API shows different status, use API data instead
+                if ($apiTransactionStatus !== $transactionStatus) {
+                    Log::warning('⚠️ Webhook vs API status mismatch, using API data', [
+                        'order_id' => $notification['order_id'],
+                        'webhook_status' => $transactionStatus,
+                        'api_status' => $apiTransactionStatus,
+                        'webhook_fraud_status' => $fraudStatus,
+                        'api_fraud_status' => $apiFraudStatus
+                    ]);
+                    
+                    $transactionStatus = $apiTransactionStatus;
+                    $fraudStatus = $apiFraudStatus;
+                } else {
+                    Log::info('✅ API confirmation matches webhook data');
+                }
+            } else {
+                Log::warning('⚠️ Failed to verify with API, proceeding with webhook data');
+            }
+        } else if ($transactionStatus === 'settlement') {
+            // 🚨 PERBAIKAN: Clear cache for settlement webhooks to ensure fresh status
+            $cacheKey = "midtrans_status_{$notification['order_id']}";
+            cache()->forget($cacheKey);
+            
+            Log::info('🗑️ Cache cleared for settlement webhook', [
+                'order_id' => $notification['order_id'],
+                'cache_key' => $cacheKey
+            ]);
+        }
+
+        // 🔍 VALIDATION 4: Ignore premature settlement notifications
+        // ✅ GANTI DENGAN INI (atau hapus total):
+if ($transactionStatus === 'settlement' && $transactionTime) {
+    $transactionAge = time() - strtotime($transactionTime);
+    if ($transactionAge < 3) { // Hanya blokir jika < 3 detik
+        Log::warning('⚠️ Very premature settlement notification, ignoring');
+        return null;
+    }
+}
+
+        $paymentType = $notification['payment_type'] ?? '';
         $paymentStatus = $this->mapToSimplePaymentStatus($transactionStatus, $fraudStatus);
 
         Log::info('✅ Payment status mapped FROM WEBHOOK', [
@@ -425,7 +506,15 @@ public function handleNotification($notification)
             'transaction_status' => $transactionStatus,
             'fraud_status' => $fraudStatus,
             'mapped_payment_status' => $paymentStatus,
-            'source' => 'webhook_direct'
+            'source' => $isSuspiciousTiming ? 'webhook_verified' : 'webhook_direct',
+            'validated' => true,
+            'validations_passed' => [
+                'signature_check' => true,
+                'expiry_check' => !($expiryTime && strtotime($expiryTime) < time()),
+                'timing_check' => !$isSuspiciousTiming,
+                'cache_cleared' => $transactionStatus === 'settlement',
+                'api_verification' => $isSuspiciousTiming ? 'performed' : 'skipped'
+            ]
         ]);
 
         return [
@@ -449,6 +538,9 @@ public function handleNotification($notification)
         return null;
     }
 }
+
+
+
 
     /**
      * UPDATED: Map to simplified payment status for single status system

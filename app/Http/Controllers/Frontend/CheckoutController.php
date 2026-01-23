@@ -2557,29 +2557,66 @@ public function paymentSuccess(Request $request)
         $order = Order::where('order_number', $orderNumber)->first();
         
         if ($order) {
-            // ✅ UPDATE ORDER STATUS TO PAID FIRST
-            $order->update(['status' => 'paid']);
+            // 🔍 PERBAIKAN: Cek status pembayaran real dari Midtrans API
+            $midtransStatus = $this->midtransService->getTransactionStatus($orderNumber);
             
-            // ✅ AUTO-CREATE IN KOMERCE FOR PAID ORDERS
-            if ($order->status === 'paid') {
-                try {
-                    $this->createKomerceOrderAsync($order);
-                } catch (\Exception $e) {
-                    Log::error('Failed to create Komerce order in paymentSuccess', [
+            if ($midtransStatus) {
+                $actualTransactionStatus = $midtransStatus['transaction_status'] ?? 'unknown';
+                $actualFraudStatus = $midtransStatus['fraud_status'] ?? 'accept';
+                
+                Log::info('Actual payment status from Midtrans API', [
+                    'order_id' => $orderNumber,
+                    'transaction_status' => $actualTransactionStatus,
+                    'fraud_status' => $actualFraudStatus
+                ]);
+                
+                // Hanya update ke 'paid' jika benar-benar settlement
+                if ($actualTransactionStatus === 'settlement' && $actualFraudStatus === 'accept') {
+                    $order->update(['status' => 'paid']);
+                    
+                    Log::info('Order status updated to paid after API verification', [
                         'order_number' => $orderNumber,
-                        'error' => $e->getMessage()
+                        'transaction_status' => $actualTransactionStatus
                     ]);
+                    
+                    // Auto-create Komerce order untuk yang benar-benar paid
+                    try {
+                        $this->createKomerceOrderAsync($order);
+                    } catch (\Exception $e) {
+                        Log::error('Failed to create Komerce order in paymentSuccess', [
+                            'order_number' => $orderNumber,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+                    
+                    return redirect()->route('checkout.success', ['orderNumber' => $orderNumber])
+                                   ->with('success', 'Payment completed! We are processing your order.');
+                } else {
+                    // Status masih pending/failed, jangan ubah
+                    Log::warning('Payment not yet completed, keeping current status', [
+                        'order_number' => $orderNumber,
+                        'transaction_status' => $actualTransactionStatus,
+                        'fraud_status' => $actualFraudStatus,
+                        'current_order_status' => $order->status
+                    ]);
+                    
+                    return redirect()->route('checkout.success', ['orderNumber' => $orderNumber])
+                                   ->with('warning', 'Payment is being processed. You will receive confirmation shortly.');
                 }
+            } else {
+                // Gagal get status dari API, jangan ubah status
+                Log::warning('Failed to get status from Midtrans API in paymentSuccess', [
+                    'order_number' => $orderNumber
+                ]);
+                
+                return redirect()->route('checkout.success', ['orderNumber' => $orderNumber])
+                               ->with('warning', 'Payment status is being verified. Please check back in a few minutes.');
             }
         }
-        
-        return redirect()->route('checkout.success', ['orderNumber' => $orderNumber])
-                       ->with('success', 'Payment completed! We are processing your order.');
     }
     
-    return redirect()->route('home')->with('success', 'Payment completed successfully!');
+    return redirect()->route('home')->with('error', 'Order not found.');
 }
-
 public function paymentPending(Request $request)
 {
     $orderNumber = $request->get('order_id');
