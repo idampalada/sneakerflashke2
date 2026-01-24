@@ -148,146 +148,238 @@ class ProductController extends Controller
 }
 
     // ⭐ NEW: Product Detail Show Method
-public function show($slug)
+    private function formatSizeForUrl($size) 
     {
-        try {
-            // ⭐ SOLUTION: Check if accessing base slug, redirect to size-specific URL
-            $baseSlug = $slug;
-            $requestedSize = null;
-            $hasSize = false;
+        return str_replace('.', '', (string) $size);
+    }
+    
+    /**
+     * ⭐ HELPER: Parse size dari URL kembali ke format asli
+     */
+    private function parseSizeFromUrl($urlSize) 
+    {
+        // Jika sudah ada titik, return as is
+        if (strpos($urlSize, '.') !== false) {
+            return $urlSize;
+        }
+        
+        // Jika 3 digit dan > 100, maka format XX.X (contoh: 405 -> 40.5)
+        if (is_numeric($urlSize) && strlen($urlSize) == 3 && intval($urlSize) > 100) {
+            return substr($urlSize, 0, 2) . '.' . substr($urlSize, 2);
+        }
+        
+        // Jika 4 digit dan > 1000, maka format XXX.X (contoh: 1105 -> 110.5)  
+        if (is_numeric($urlSize) && strlen($urlSize) == 4 && intval($urlSize) > 1000) {
+            return substr($urlSize, 0, 3) . '.' . substr($urlSize, 3);
+        }
+        
+        return $urlSize;
+    }
+    
+    /**
+     * ⭐ PERBAIKAN METHOD SHOW - Handle both decimal and non-decimal sizes
+     */
+    public function show($slug)
+{
+    try {
+        Log::info('=== PRODUCT SHOW DEBUG ===', ['slug' => $slug]);
+        
+        $originalSlug = $slug;
+        $requestedSize = null;
+        $hasSize = false;
+        $baseSlug = $slug;
+        
+        // Extract size dari URL
+        if (preg_match('/^(.+)-size-(\d+\.?\d*)$/', $slug, $matches)) {
+            $baseSlug = $matches[1];
+            $requestedSize = $matches[2];
+            $hasSize = true;
             
-            // Check if slug has -size-XX format
-            if (preg_match('/(.*)-size-(\d+(?:\.\d+)?)$/', $slug, $matches)) {
-                $baseSlug = $matches[1];
-                $requestedSize = $matches[2];
-                $hasSize = true;
+            // Convert URL size format (405 → 40.5)
+            if (strlen($requestedSize) === 3 && !strpos($requestedSize, '.') && intval($requestedSize) > 100) {
+                $requestedSize = substr($requestedSize, 0, 2) . '.' . substr($requestedSize, 2);
             }
+        }
+        
+        Log::info('Parsed URL', [
+            'original_slug' => $originalSlug,
+            'base_slug' => $baseSlug,
+            'requested_size' => $requestedSize,
+            'has_size' => $hasSize
+        ]);
+        
+        $product = null;
+        
+        // ⭐ STRATEGY 1: EXACT SLUG MATCH (highest priority)
+        if ($hasSize) {
+            // Coba cari dengan URL size tanpa titik (405)
+            $urlSizeWithoutDot = str_replace('.', '', $requestedSize);
+            $expectedSlugWithoutDot = $baseSlug . '-size-' . $urlSizeWithoutDot;
             
-            // Always find product by base slug first
+            // Coba cari dengan URL size dengan titik (40.5) 
+            $expectedSlugWithDot = $baseSlug . '-size-' . $requestedSize;
+            
+            $product = Product::where('is_active', true)
+                ->whereNotNull('published_at')
+                ->where('published_at', '<=', now())
+                ->where(function($q) use ($originalSlug, $expectedSlugWithoutDot, $expectedSlugWithDot) {
+                    $q->where('slug', $originalSlug)              // URL asli
+                      ->orWhere('slug', $expectedSlugWithoutDot)  // Format tanpa titik
+                      ->orWhere('slug', $expectedSlugWithDot);    // Format dengan titik
+                })
+                ->with('category')
+                ->first();
+                
+            if ($product) {
+                Log::info('✅ STRATEGY 1 SUCCESS - Exact slug match', [
+                    'product_id' => $product->id,
+                    'found_slug' => $product->slug,
+                    'expected_slugs' => [$originalSlug, $expectedSlugWithoutDot, $expectedSlugWithDot]
+                ]);
+            }
+        }
+        
+        // ⭐ STRATEGY 2: BASE SLUG + SIZE VALIDATION (fallback)
+        if (!$product && $hasSize) {
+            Log::info('Strategy 1 failed, trying Strategy 2 - Base slug + size validation');
+            
+            $products = Product::where('is_active', true)
+                ->whereNotNull('published_at')
+                ->where('published_at', '<=', now())
+                ->where(function($query) use ($baseSlug) {
+                    $query->where('slug', $baseSlug)                    // Base slug exact
+                          ->orWhere('slug', 'LIKE', $baseSlug . '-%');  // Base slug pattern
+                })
+                ->with('category')
+                ->get();
+                
+            Log::info('Strategy 2 candidates', [
+                'total_found' => $products->count(),
+                'slugs_found' => $products->pluck('slug')->toArray()
+            ]);
+            
+            // Check size matching
+            foreach ($products as $candidate) {
+                $availableSizes = is_string($candidate->available_sizes) 
+                    ? json_decode($candidate->available_sizes, true) 
+                    : $candidate->available_sizes;
+                    
+                if (is_array($availableSizes)) {
+                    foreach ($availableSizes as $size) {
+                        $normalizedSize = trim((string)$size);
+                        $normalizedRequested = trim((string)$requestedSize);
+                        
+                        if ($normalizedSize === $normalizedRequested) {
+                            $product = $candidate;
+                            Log::info('✅ STRATEGY 2 SUCCESS - Size match', [
+                                'product_id' => $product->id,
+                                'matching_size' => $size,
+                                'candidate_slug' => $candidate->slug
+                            ]);
+                            break 2;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // ⭐ STRATEGY 3: BASE SLUG ONLY (no size request)
+        if (!$product && !$hasSize) {
             $product = Product::where('slug', $baseSlug)
                 ->where('is_active', true)
                 ->whereNotNull('published_at')
                 ->where('published_at', '<=', now())
                 ->with('category')
                 ->first();
-            
-            // If base slug not found, try exact slug match (fallback)
-            if (!$product) {
-                $product = Product::where('slug', $slug)
-                    ->where('is_active', true)
-                    ->whereNotNull('published_at')
-                    ->where('published_at', '<=', now())
-                    ->with('category')
-                    ->first();
-            }
-
-            if (!$product) {
-                abort(404, 'Product not found');
-            }
-            
-            // ⭐ NEW LOGIC: If accessed via base slug (no size), redirect to smallest size
-            if (!$hasSize) {
-                // Get all available sizes for this product
-                $allSizes = collect();
                 
-                // Add current product size
-                if ($product->available_sizes && count($product->available_sizes) > 0) {
-                    foreach ($product->available_sizes as $size) {
-                        $allSizes->push(floatval($size));
-                    }
-                }
-                
-                // Get size variants if exists
-                if (!empty($product->sku_parent)) {
-                    $sizeVariants = Product::where('sku_parent', $product->sku_parent)
-                        ->where('is_active', true)
-                        ->whereNotNull('published_at')
-                        ->where('published_at', '<=', now())
-                        ->get();
-                        
-                    foreach ($sizeVariants as $variant) {
-                        if ($variant->available_sizes && count($variant->available_sizes) > 0) {
-                            foreach ($variant->available_sizes as $size) {
-                                $allSizes->push(floatval($size));
-                            }
-                        }
-                    }
-                }
-                
-                // Get smallest available size and redirect
-                if ($allSizes->isNotEmpty()) {
-                    $smallestSize = $allSizes->min();
-                    $sizeUrl = route('products.show', $baseSlug . '-size-' . $smallestSize);
-                    return redirect($sizeUrl, 301);
-                }
+            if ($product) {
+                Log::info('✅ STRATEGY 3 SUCCESS - Base slug only', [
+                    'product_id' => $product->id
+                ]);
             }
-
-            // ⭐ ENHANCED: Get size variants for the same product
-            $sizeVariants = collect();
-            if (!empty($product->sku_parent)) {
-                $sizeVariants = Product::where('sku_parent', $product->sku_parent)
-                    ->where('is_active', true)
-                    ->whereNotNull('published_at')
-                    ->where('published_at', '<=', now())
-                    ->where('id', '!=', $product->id)
-                    ->get()
-                    ->map(function ($variant) {
-                        // Extract size from SKU or available_sizes
-                        $size = null;
-                        if (is_array($variant->available_sizes) && !empty($variant->available_sizes)) {
-                            $size = $variant->available_sizes[0];
-                        } elseif (is_string($variant->available_sizes)) {
-                            $size = $variant->available_sizes;
-                        } else {
-                            // Extract from SKU pattern
-                            $size = $this->extractSizeFromSku($variant->sku, $variant->sku_parent);
-                        }
-                        
-                        return [
-                            'id' => $variant->id,
-                            'size' => $size ?: 'One Size',
-                            'stock' => $variant->stock_quantity ?? 0,
-                            'sku' => $variant->sku,
-                            'price' => $variant->sale_price ?: $variant->price,
-                            'original_price' => $variant->price,
-                            'available' => ($variant->stock_quantity ?? 0) > 0,
-                            'slug' => $variant->slug
-                        ];
-                    });
-            }
-
-            // Get related products
-            $relatedProducts = Product::where('is_active', true)
+        }
+        
+        if (!$product) {
+            Log::error('❌ ALL STRATEGIES FAILED', [
+                'original_slug' => $originalSlug,
+                'base_slug' => $baseSlug,
+                'requested_size' => $requestedSize
+            ]);
+            abort(404, 'Product not found');
+        }
+        
+        Log::info('🎯 FINAL RESULT', [
+            'product_id' => $product->id,
+            'product_name' => $product->name,
+            'product_slug' => $product->slug,
+            'available_sizes' => $product->available_sizes
+        ]);
+        
+        // Rest of method sama (size variants, related products, etc.)
+        // ... existing code untuk sizeVariants dan relatedProducts
+        
+        $sizeVariants = collect();
+        if (!empty($product->sku_parent)) {
+            $sizeVariants = Product::where('sku_parent', $product->sku_parent)
+                ->where('is_active', true)
                 ->whereNotNull('published_at')
                 ->where('published_at', '<=', now())
                 ->where('id', '!=', $product->id)
-                ->where(function ($query) use ($product) {
-                    if ($product->category_id) {
-                        $query->where('category_id', $product->category_id);
+                ->get()
+                ->map(function ($variant) use ($baseSlug) {
+                    $size = null;
+                    if (is_array($variant->available_sizes) && !empty($variant->available_sizes)) {
+                        $size = $variant->available_sizes[0];
+                    } elseif (is_string($variant->available_sizes)) {
+                        $decoded = json_decode($variant->available_sizes, true);
+                        $size = is_array($decoded) ? $decoded[0] : $variant->available_sizes;
                     }
-                    if ($product->brand) {
-                        $query->orWhere('brand', $product->brand);
-                    }
-                })
-                ->inRandomOrder()
-                ->limit(12)
-                ->get();
-
-            // Format arrays
-            $product = $this->formatProductArrays($product);
-
-            return view('frontend.products.show', compact('product', 'sizeVariants', 'relatedProducts'));
-
-        } catch (\Exception $e) {
-            Log::error('Product show error: ' . $e->getMessage(), [
-                'slug' => $slug,
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            abort(404, 'Product not found');
+                    
+                    $dynamicSlug = $baseSlug . '-size-' . str_replace('.', '', $size);
+                    
+                    return [
+                        'id' => $variant->id,
+                        'size' => $size ?: 'One Size',
+                        'stock' => $variant->stock_quantity ?? 0,
+                        'sku' => $variant->sku,
+                        'price' => $variant->sale_price ?: $variant->price,
+                        'original_price' => $variant->price,
+                        'available' => ($variant->stock_quantity ?? 0) > 0,
+                        'slug' => $dynamicSlug
+                    ];
+                });
         }
-    }
 
+        $relatedProducts = Product::where('is_active', true)
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now())
+            ->where('id', '!=', $product->id)
+            ->where(function ($query) use ($product) {
+                if ($product->category_id) {
+                    $query->where('category_id', $product->category_id);
+                }
+                if ($product->brand) {
+                    $query->orWhere('brand', $product->brand);
+                }
+            })
+            ->inRandomOrder()
+            ->limit(12)
+            ->get();
+
+        $product = $this->formatProductArrays($product);
+
+        return view('frontend.products.show', compact('product', 'sizeVariants', 'relatedProducts'));
+
+    } catch (\Exception $e) {
+        Log::error('Product show error: ' . $e->getMessage(), [
+            'slug' => $slug,
+            'line' => $e->getLine(),
+            'file' => $e->getFile()
+        ]);
+        
+        abort(404, 'Product not found');
+    }
+}
     /**
      * ⭐ CORRECTED: Group products by sku_parent (same product), variants by SKU
      */

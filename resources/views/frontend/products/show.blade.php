@@ -1121,23 +1121,19 @@ window.selectSize = function(element) {
     
     console.log('📦 Size selection data:', {size, productId, stock, price});
     
-    // 1. PERTAMA: Update form inputs (dari kode 2) - DILAKUKAN SEBELUM REFRESH
+    // 1. Update form inputs
     const sizeInput = document.getElementById('selectedSizeValue');
     const productInput = document.getElementById('selectedProductId');
     
     if (sizeInput) {
         sizeInput.value = size;
         console.log('✅ Size input set to:', size);
-        // Simpan ke sessionStorage untuk persist setelah refresh
         sessionStorage.setItem('selectedSize', size);
-    } else {
-        console.error('❌ selectedSizeValue input not found!');
     }
     
     if (productInput && productId) {
         productInput.value = productId;
         console.log('✅ Product ID set to:', productId);
-        // Simpan ke sessionStorage untuk persist setelah refresh
         sessionStorage.setItem('selectedProductId', productId);
     }
     
@@ -1166,33 +1162,39 @@ window.selectSize = function(element) {
     if (addToCartBtn) {
         addToCartBtn.disabled = false;
         if (addToCartBtn.innerHTML.includes('Select Size')) {
-            addToCartBtn.innerHTML = '<i class="fas fa-shopping-cart"></i>';
+            addToCartBtn.innerHTML = '<i class="fas fa-shopping-cart"></i> Add to Cart';
         }
     }
     
-    // 5. KEDUA: Update URL dan refresh (dari kode 1) - DILAKUKAN TERAKHIR
-    var currentUrl = window.location.href;
-    var urlParts = currentUrl.split('-');
-    var lastPart = urlParts[urlParts.length - 1];
+    // 5. ⭐ DYNAMIC URL GENERATION
+    const currentUrl = window.location.href;
     
-    // Cek apakah bagian terakhir URL adalah angka atau angka dengan titik
-    if (!isNaN(lastPart) || lastPart.match(/^\d+\.\d+$/)) {
-        // Ganti ukuran di URL - hapus titik
-        var cleanSize = size.toString().replace('.', '');
-        urlParts[urlParts.length - 1] = cleanSize;
-        var newUrl = urlParts.join('-');
-        
-        console.log('🌐 URL will change from:', currentUrl, 'to:', newUrl);
-        
-        // Small delay untuk memastikan form sudah terupdate
-        setTimeout(() => {
-            // Refresh halaman dengan URL baru
-            window.location.href = newUrl;
-        }, 100); // 100ms delay
+    // Extract base URL (remove existing size if any)
+    let baseUrl = currentUrl;
+    if (currentUrl.match(/-size-[\d.]+$/)) {
+        baseUrl = currentUrl.replace(/-size-[\d.]+$/, '');
     }
     
-    console.log('🎯 Size selection completed successfully');
+    // Generate new URL with size (tanpa titik)
+    const cleanSize = size.toString().replace(/\./g, ''); // 40.5 → 405
+    const newUrl = baseUrl + '-size-' + cleanSize;
+    
+    console.log('🌐 Dynamic URL generation:', {
+        currentUrl: currentUrl,
+        baseUrl: baseUrl,
+        size: size,
+        cleanSize: cleanSize,
+        newUrl: newUrl
+    });
+    
+    // Redirect ke URL baru
+    setTimeout(() => {
+        window.location.href = newUrl;
+    }, 100);
+    
+    console.log('🎯 Size selection completed');
 };
+
 
 // Restore selected values after page load (jika ada refresh)
 document.addEventListener('DOMContentLoaded', function() {
@@ -1240,5 +1242,113 @@ window.copyProductLink = function(button) {
         button.innerHTML = 'Copy URL';
     }, 2000);
 };
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Page loaded - dynamic size detection...');
+    
+    // Extract size dari URL
+    const currentUrl = window.location.href;
+    const sizeMatch = currentUrl.match(/-size-(\d+\.?\d*)$/);
+    
+    if (sizeMatch) {
+        let urlSize = sizeMatch[1];
+        console.log('📏 Size detected in URL:', urlSize);
+        
+        // Convert URL size ke display format
+        let displaySize = urlSize;
+        if (urlSize.length === 3 && parseInt(urlSize) > 100 && !urlSize.includes('.')) {
+            displaySize = urlSize.substring(0, 2) + '.' + urlSize.substring(2);
+        }
+        
+        console.log('📏 Display size:', displaySize);
+        
+        // ⭐ FIND MATCHING SIZE BUTTON
+        const sizeButtons = document.querySelectorAll('.size-option');
+        let matchingButton = null;
+        
+        sizeButtons.forEach(button => {
+            const buttonSize = button.getAttribute('data-size');
+            if (buttonSize === displaySize) {
+                matchingButton = button;
+                console.log('✅ Found matching button for size:', displaySize);
+            }
+        });
+        
+        // AUTO-UPDATE FORM DAN UI
+        if (matchingButton) {
+            console.log('🎯 Auto-selecting size:', displaySize);
+            
+            // Update form inputs
+            const sizeInput = document.getElementById('selectedSizeValue');
+            const productInput = document.getElementById('selectedProductId');
+            
+            if (sizeInput) {
+                sizeInput.value = displaySize;
+                console.log('✅ Updated selectedSizeValue:', displaySize);
+            }
+            
+            const productId = matchingButton.getAttribute('data-product-id');
+            if (productInput && productId) {
+                productInput.value = productId;
+                console.log('✅ Updated selectedProductId:', productId);
+            }
+            
+            // Update UI
+            sizeButtons.forEach(btn => {
+                btn.classList.remove('border-blue-500', 'bg-blue-50', 'ring-2', 'ring-blue-500');
+                btn.classList.add('border-gray-300', 'bg-white');
+            });
+            
+            matchingButton.classList.remove('border-gray-300', 'bg-white');
+            matchingButton.classList.add('border-blue-500', 'bg-blue-50', 'ring-2', 'ring-blue-500');
+            
+            // Enable add to cart
+            const stock = matchingButton.getAttribute('data-stock');
+            const quantityInput = document.getElementById('quantity');
+            const addToCartBtn = document.querySelector('#addToCartForm button[type="submit"]');
+            
+            if (quantityInput && stock) {
+                quantityInput.setAttribute('max', stock);
+            }
+            
+            if (addToCartBtn) {
+                addToCartBtn.disabled = false;
+                if (addToCartBtn.innerHTML.includes('Select Size')) {
+                    addToCartBtn.innerHTML = '<i class="fas fa-shopping-cart"></i> Add to Cart';
+                }
+            }
+            
+            console.log('🎯 Dynamic auto-selection completed!');
+        } else {
+            console.warn('⚠️ No matching size button found for:', displaySize);
+        }
+    } else {
+        console.log('📝 No size detected in URL');
+    }
+    
+    // Restore sessionStorage values
+    const savedSize = sessionStorage.getItem('selectedSize');
+    const savedProductId = sessionStorage.getItem('selectedProductId');
+    
+    if (savedSize) {
+        const sizeInput = document.getElementById('selectedSizeValue');
+        if (sizeInput && !sizeInput.value) { // Only if not already set
+            sizeInput.value = savedSize;
+            console.log('🔄 Restored size from session:', savedSize);
+        }
+        sessionStorage.removeItem('selectedSize');
+    }
+    
+    if (savedProductId) {
+        const productInput = document.getElementById('selectedProductId');
+        if (productInput && !productInput.value) { // Only if not already set
+            productInput.value = savedProductId;
+            console.log('🔄 Restored product ID from session:', savedProductId);
+        }
+        sessionStorage.removeItem('selectedProductId');
+    }
+});
+
+
 </script>
 @endsection
