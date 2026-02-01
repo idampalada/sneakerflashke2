@@ -45,8 +45,8 @@ Route::withoutMiddleware(['web'])->group(function () {
             try {
                 $service = new \App\Services\KomerceShippingService();
                 
-                $originId = $request->input('origin_id', 17551);
-                $destinationId = $request->input('destination_id', 17551);
+                $originId = $request->input('origin_id', 17485);
+                $destinationId = $request->input('destination_id', 17485);
                 $weight = $request->input('weight', 2500);
                 $itemValue = $request->input('item_value', 70000);
                 $cod = $request->boolean('cod', false);

@@ -325,7 +325,7 @@ class KomerceShippingService
     /**
      * Test API connection
      */
-    public function testConnection($originId = 17551, $destinationId = 17551, $weight = 2500)
+    public function testConnection($originId = 17485, $destinationId = 17485, $weight = 2500)
     {
         Log::info('🧪 Testing Komerce API connection');
         

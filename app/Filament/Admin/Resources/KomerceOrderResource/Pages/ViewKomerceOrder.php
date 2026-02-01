@@ -197,7 +197,7 @@ Actions\Action::make('generate_label')
         $meta = json_decode($record->meta_data ?? '{}', true) ?? [];
         
         // FIXED: Allow for paid, processing, and shipped orders
-        return in_array($record->status, ['paid', 'processing', 'shipped']) 
+        return in_array($record->status, ['paid', 'processing', 'shipped', 'delivered']) 
             && (isset($meta['komerce_order_id']) || !empty($record->komerce_order_no));
     })
     ->action(function () {

@@ -683,13 +683,13 @@ public function getSavingsBreakdown(): array
     /**
      * Check if order is ready for pickup (paid but no pickup requested yet)
      */
-    public function isReadyForPickup(): bool
-    {
-        $meta = json_decode($this->meta_data ?? '{}', true) ?? [];
-        return $this->status === 'paid' && 
-               isset($meta['komerce_order_id']) && 
-               !$this->hasPickupRequested();
-    }
+public function isReadyForPickup(): bool
+{
+    $meta = json_decode($this->meta_data ?? '{}', true) ?? [];
+    
+    return $this->status === 'paid' && 
+           !$this->hasPickupRequested();
+}
     /**
  * Get AWB from meta_data or komerce_awb (fallback)
  */

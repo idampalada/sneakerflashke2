@@ -499,45 +499,62 @@ public function getWarehouseInventory(array $params = []): array
     return $this->request('POST', '/openapi/warehouse-inventory/v1/sku/list', $body);
 }
 
-private function getEnabledWarehouseId(): ?string
+private function getEnabledWarehouseId(): string
 {
     static $cachedWarehouseId = null;
-    
-    // Return cached result if already found
+
     if ($cachedWarehouseId !== null) {
         return $cachedWarehouseId;
     }
-    
-    $result = $this->getWarehouses(['page' => 0, 'size' => 10]);
-    
-    if (($result['code'] ?? null) === 'SUCCESS') {
-        $warehouses = $result['data']['content'] ?? [];
-        
+
+    $configuredWarehouseId = config('services.ginee.warehouse_id');
+
+    $result = $this->getWarehouses(['page' => 0, 'size' => 20]);
+
+    if (($result['code'] ?? null) !== 'SUCCESS') {
+        throw new \RuntimeException('Failed to fetch warehouses from Ginee');
+    }
+
+    $warehouses = $result['data']['content'] ?? [];
+
+    // 1️⃣ PRIORITAS ABSOLUT: warehouse dari config
+    if ($configuredWarehouseId) {
         foreach ($warehouses as $warehouse) {
-            // Look for ENABLED warehouse (based on your actual data)
-            if (($warehouse['status'] ?? '') === 'ENABLE') {
-                $cachedWarehouseId = $warehouse['id'] ?? null;
-                
-                Log::info('✅ [Ginee] Found enabled warehouse', [
-                    'id' => $cachedWarehouseId,
-                    'name' => $warehouse['name'] ?? 'Unknown',
-                    'code' => $warehouse['code'] ?? 'Unknown'
+            if (
+                ($warehouse['id'] ?? null) === $configuredWarehouseId &&
+                ($warehouse['status'] ?? null) === 'ENABLE'
+            ) {
+                Log::info('🏭 [Ginee] Using configured warehouse', [
+                    'id' => $warehouse['id'],
+                    'code' => $warehouse['code'],
+                    'name' => $warehouse['name'],
                 ]);
-                
-                return $cachedWarehouseId;
+
+                return $cachedWarehouseId = $warehouse['id'];
             }
         }
+
+        // ❌ Kalau config ada tapi tidak ketemu → HARUS FAIL
+        throw new \RuntimeException(
+            "Configured GINEE_WAREHOUSE_ID not found or not ENABLE"
+        );
     }
-    
-    // If no enabled warehouse found, use default
-    $cachedWarehouseId = $this->defaultWarehouseId;
-    
-    Log::warning('⚠️ [Ginee] No enabled warehouse found, using default', [
-        'default_id' => $cachedWarehouseId
-    ]);
-    
-    return $cachedWarehouseId;
+
+    // 2️⃣ FALLBACK (opsional, kalau memang mau)
+    foreach ($warehouses as $warehouse) {
+        if (($warehouse['status'] ?? null) === 'ENABLE') {
+            Log::warning('⚠️ [Ginee] Falling back to first ENABLE warehouse', [
+                'id' => $warehouse['id'],
+                'code' => $warehouse['code'],
+            ]);
+
+            return $cachedWarehouseId = $warehouse['id'];
+        }
+    }
+
+    throw new \RuntimeException('No ENABLE warehouse found in Ginee');
 }
+
 public function testBothStockEndpoints(): array
 {
     Log::info('🧪 [Ginee] Testing both stock update endpoints');

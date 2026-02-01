@@ -32,20 +32,16 @@ class BannerResource extends Resource
 
                         // Upload untuk Desktop
                         Forms\Components\FileUpload::make('desktop_images')
-                            ->label('Desktop Banner Images (Recommended: 1600x500)')
-                            ->directory('banners/desktop')
-                            ->image()
-                            ->imageResizeMode('force')
-                            ->imageResizeTargetWidth('1600')
-                            ->imageResizeTargetHeight('500')
-                            ->multiple()
-                            ->minFiles(1)
-                            ->maxFiles(10)
-                            ->required()
-                            ->columnSpan(1)
-                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                            ->maxSize(5120)
-                            ->helperText('Upload banner desktop. Akan diresize ke 1600x500px.'),
+    ->label('Desktop Banner Images (1600x500)')
+    ->directory('banners/desktop')
+    ->multiple()
+    ->minFiles(1)
+    ->maxFiles(10)
+    ->required()
+    ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+    ->maxSize(5120)
+    ->helperText('File disimpan apa adanya. Tidak ada resize / compress.'),
+
 
                         // Upload untuk Mobile
                         Forms\Components\FileUpload::make('mobile_images')

@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -17,7 +21,7 @@
     <meta name="midtrans-client-key" content="{{ config('services.midtrans.client_key') }}">
     <meta name="midtrans-production" content="{{ config('services.midtrans.is_production') ? 'true' : 'false' }}">
     @yield('head')
-    <title>@yield('title', 'SneakerFlash - Premium Sneakers')</title>
+    <title>@yield('title', 'SneakersFlash - Premium Sneakers')</title>
     
     <!-- Preconnects for performance -->
     <link rel="preconnect" href="https://fonts.bunny.net">
@@ -523,7 +527,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- Mobile Logo (TENGAH) -->
     <div class="mobile-logo-center">
         <a href="/">
-            <img src="{{ asset('images/logo-sneakerflash.jpg') }}" alt="SneakerFlash Logo" class="ka-logo-img">
+            <img src="{{ asset('images/logo-sneakerflashh.jpg') }}" alt="SneakerFlash Logo" class="ka-logo-img">
         </a>
     </div>
     

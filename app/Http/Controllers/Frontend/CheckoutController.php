@@ -667,7 +667,7 @@ public function calculateShipping(Request $request)
         }
 
         // Get store origin from Komerce environment
-        $storeOriginId = env('STORE_ORIGIN_DESTINATION_ID', 17551);
+        $storeOriginId = env('STORE_ORIGIN_DESTINATION_ID', 17485);
         
         if (!$storeOriginId || !is_numeric($storeOriginId)) {
             Log::error('❌ Komerce: Invalid store origin configuration', [
@@ -716,7 +716,7 @@ public function calculateShipping(Request $request)
         ->timeout(env('KOMERCE_TIMEOUT', 30))
         ->retry(2, 1000)
 ->get('https://api.collaborator.komerce.id/tariff/api/v1/calculate', [
-            'shipper_destination_id' => $storeOriginId,      // Store location: 17551
+            'shipper_destination_id' => $storeOriginId,      // Store location: 17485
             'receiver_destination_id' => $destinationId,     // Customer location: from form
             'weight' => number_format($finalWeight / 1000, 3, '.', ''), // Convert to kg
             'item_value' => $itemValue,                      // Cart total value
@@ -1007,8 +1007,8 @@ public function getShippingConfig()
 {
     return response()->json([
         'api_provider' => 'Komerce',
-        'store_origin_id' => env('STORE_ORIGIN_DESTINATION_ID', 17551),
-        'store_location' => env('STORE_LOCATION_NAME', 'Jl. Bank Exim No 37 RT 5 RW 1, Jakarta Selatan'),
+        'store_origin_id' => env('STORE_ORIGIN_DESTINATION_ID', 17485),
+        'store_location' => env('STORE_LOCATION_NAME', 'Jl. Komp Graha Indah Green Ville Blok X No 34 RT 16 RW 9, Jakarta Barat'),
         'api_configured' => !empty(env('KOMERCE_API_KEY')),
         'base_url' => env('KOMERCE_BASE_URL'),
         'timeout' => env('KOMERCE_TIMEOUT', 25),
@@ -2382,7 +2382,7 @@ private function createMidtransPayment($order, $cartItems, $request)
 
     private function getOriginIdFromEnv()
     {
-        $originCityName = env('STORE_ORIGIN_CITY_NAME', 'jakarta selatan');
+        $originCityName = env('STORE_ORIGIN_CITY_NAME', 'Jakarta Barat');
         $originCityIdFallback = env('STORE_ORIGIN_CITY_ID', 158);
         
         Log::info('Getting origin from .env', [
@@ -3147,13 +3147,13 @@ private function createKomerceOrderSync($order, $request = null, $orderItems = n
             'order_date' => $order->created_at->format('Y-m-d H:i:s'),
             'brand_name' => env('STORE_BRAND_NAME', 'Sneakers Flash'),
             'shipper_name' => env('STORE_SHIPPER_NAME', 'Sneakers Flash Store'),
-            'shipper_phone' => env('STORE_SHIPPER_PHONE', '6281287809468'),
+            'shipper_phone' => env('STORE_SHIPPER_PHONE', '081313911391'),
             'shipper_email' => env('STORE_SHIPPER_EMAIL', 'store@sneakersflash.com'),
-            'shipper_destination_id' => 17551,
-            'shipper_address' => 'Jl. Bank Exim No 37 RT 5 RW 1',
+            'shipper_destination_id' => 17485,
+            'shipper_address' => 'Jl. Komp Graha Indah Green Ville Blok X No 34 RT 16 RW 9',
             'receiver_name' => $addressInfo['recipient_name'] ?? $order->customer_name,
             'receiver_phone' => $addressInfo['phone_recipient'] ?? $order->customer_phone,
-            'receiver_destination_id' => (int) ($order->shipping_destination_id ?? env('KOMERCE_DEFAULT_DESTINATION_ID', 17551)),
+            'receiver_destination_id' => (int) ($order->shipping_destination_id ?? env('KOMERCE_DEFAULT_DESTINATION_ID', 17485)),
             'receiver_address' => $order->shipping_address,
             'shipping' => 'JNE',
             'shipping_type' => 'JNEFlat', 

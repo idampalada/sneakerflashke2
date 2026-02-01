@@ -246,7 +246,7 @@
             <!-- ⭐ ENHANCED: Size Selection with Clean Display -->
             @if(($product->available_sizes && count($product->available_sizes) > 0) || (isset($sizeVariants) && $sizeVariants->count() > 0))
                 <div>
-                    <h3 class="text-sm font-medium text-gray-900 mb-3">Select Size:</h3>
+                    <h3 class="text-sm font-medium text-gray-900 mb-3">Select EUR size:</h3>
                     <div class="flex flex-wrap gap-3" id="sizeOptionsContainer">
                         @php
                             $allSizes = collect();
@@ -1349,6 +1349,22 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+window.changeMainImage = function(imageUrl, element) {
+    const mainImage = document.getElementById('mainImage');
+    if (!mainImage) return;
 
+    // Ganti gambar utama
+    mainImage.src = imageUrl;
+
+    // Reset semua thumbnail
+    document.querySelectorAll('.thumbnail').forEach(thumb => {
+        thumb.classList.remove('ring-2', 'ring-blue-500');
+    });
+
+    // Aktifkan thumbnail yang diklik
+    if (element) {
+        element.classList.add('ring-2', 'ring-blue-500');
+    }
+};
 </script>
 @endsection
