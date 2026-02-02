@@ -16,6 +16,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Filament\Forms\Components\TextInput;
+use Illuminate\Support\Facades\Http;
+
 
 class KomerceOrderResource extends Resource
 {
@@ -295,6 +298,71 @@ class KomerceOrderResource extends Resource
                             Notification::make()->title('ERROR')->body('System error: ' . $e->getMessage())->danger()->send();
                         }
                     }),
+
+                    Action::make('cancel_komerce')
+    ->label('Cancel Order')
+    ->icon('heroicon-o-x-circle')
+    ->color('danger')
+    ->requiresConfirmation()
+    ->modalHeading('Cancel Komerce Order')
+    ->modalDescription('Masukkan Komerce Order No yang ingin dibatalkan.')
+    ->form([
+        TextInput::make('order_no')
+            ->label('Komerce Order No')
+            ->required()
+            ->helperText('Isi manual Komerce Order No')
+            ->placeholder(''),
+    ])
+    ->action(function (array $data) {
+        try {
+            $response = Http::withHeaders([
+                'x-api-key' => config('services.komerce.api_key'),
+                'Content-Type' => 'text/plain',
+            ])->put(
+                'https://api.collaborator.komerce.id/order/api/v1/orders/cancel',
+                [
+                    'order_no' => $data['order_no'],
+                ]
+            );
+
+            if ($response->successful()) {
+                Notification::make()
+                    ->title('Order Berhasil Dibatalkan')
+                    ->body("Order Komerce berhasil dibatalkan.")
+                    ->success()
+                    ->send();
+
+                Log::info('✅ Komerce Order Cancelled', [
+                    'order_no' => $data['order_no'],
+                    'response' => $response->json(),
+                ]);
+            } else {
+                Notification::make()
+                    ->title('Cancel Gagal')
+                    ->body($response->body())
+                    ->danger()
+                    ->send();
+
+                Log::error('❌ Komerce Cancel Failed', [
+                    'order_no' => $data['order_no'],
+                    'status' => $response->status(),
+                    'response' => $response->body(),
+                ]);
+            }
+        } catch (\Exception $e) {
+            Notification::make()
+                ->title('System Error')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+
+            Log::error('❌ Komerce Cancel Exception', [
+                'order_no' => $data['order_no'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }),
+
 
                 // TRACK ACTION
                 Action::make('track')
