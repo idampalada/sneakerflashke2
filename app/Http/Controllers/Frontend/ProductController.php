@@ -435,12 +435,7 @@ class ProductController extends Controller
             $enhancedProduct['total_stock'] = $totalStock;
             $enhancedProduct['has_multiple_sizes'] = $sizeVariants->count() > 1;
             
-            Log::info('Grouped product', [
-                'sku_parent' => $skuParent,
-                'variants_count' => $sizeVariants->count(),
-                'sizes' => $sizeVariants->pluck('size')->toArray(),
-                'total_stock' => $totalStock
-            ]);
+            
             
             // Return single enhanced product representing the group
             return collect([(object) $enhancedProduct]);

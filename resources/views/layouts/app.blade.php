@@ -36,8 +36,7 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Tailwind CSS - Production CDN version -->
-    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
+@vite(['resources/css/app.css', 'resources/js/app.js'])
     
     <!-- Alpine.js with Focus plugin -->
     <script defer src="https://unpkg.com/@alpinejs/focus@3.x.x/dist/cdn.min.js"></script>
@@ -962,15 +961,34 @@ function mobileMenuDropdown() {
     @if(request()->is('/') || request()->routeIs('home'))
 <!-- Image Carousel Slider -->
 @if(isset($banners) && $banners->count() > 0)
-<div class="carousel-wrapper" x-data="carousel()">
-    <div class="carousel-container">
-        <template x-for="(slide, index) in slides" :key="index">
-            <div class="carousel-slide" :class="{ 'active': currentSlide === index }">
-    {{-- <a href="{{ route('black-friday.index') }}" class="block w-full h-full"> --}}
-        <img :src="slide.desktop" :alt="slide.description" loading="lazy" class="w-full h-full object-cover">
-    </a>
+@if(isset($banners) && $banners->count() > 0)
+@php
+  $firstBanner = $banners[0];
+  $desktopHero = $firstBanner->desktop_images[0] ?? $firstBanner->image_paths[0];
+  $mobileHero  = $firstBanner->mobile_images[0]  ?? $desktopHero;
+@endphp
+
+<!-- HERO IMAGE (LCP) -->
+<div class="carousel-wrapper">
+  <!-- MOBILE HERO -->
+  <img
+    src="{{ asset('storage/' . $mobileHero) }}"
+    alt="SneakersFlash Promo"
+    fetchpriority="high"
+    decoding="async"
+    class="w-full h-[300px] object-cover md:hidden"
+  >
+
+  <!-- DESKTOP HERO -->
+  <img
+    src="{{ asset('storage/' . $desktopHero) }}"
+    alt="SneakersFlash Promo"
+    fetchpriority="high"
+    decoding="async"
+    class="w-full h-[480px] object-contain hidden md:block"
+  >
 </div>
-        </template>
+@endif
         
         <!-- Navigation arrows (jika lebih dari 1 slide) -->
         <template x-if="slides.length > 1">

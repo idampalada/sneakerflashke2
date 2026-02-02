@@ -117,14 +117,6 @@ class HomeController extends Controller
             // ⭐ CLEAN: Remove SKU parent from product name
             $representativeProduct->name = $this->cleanProductName($representativeProduct->name, $representativeProduct->sku_parent);
             
-            Log::info('Homepage grouped product', [
-                'sku_parent' => $skuParent,
-                'original_name' => $representativeProduct->getOriginal('name'),
-                'clean_name' => $representativeProduct->name,
-                'variants_count' => $sizeVariants->count(),
-                'sizes' => $sizeVariants->pluck('size')->toArray(),
-                'total_stock' => $totalStock
-            ]);
             
             // Return single enhanced product representing the group (as Eloquent object)
             return collect([$representativeProduct]);
